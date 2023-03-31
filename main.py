@@ -1,8 +1,10 @@
+from datetime import datetime
 import pandas as pd
 import os
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
+import argparse
 
 
 def merge_dictionary(dict1, dict2):
@@ -24,6 +26,7 @@ def csv_to_dataframe(csv_name) -> pd.DataFrame:
         return dataframe
     except (Exception,):
         print(f'Cannot read {csv_name}')
+        exit(1)
         return pd.DataFrame()
 
 
@@ -43,21 +46,27 @@ def parse_file(file_name, serial_numbers):
     for serial_number in serial_numbers:
         interesting_row = dataframe_it.loc[dataframe_it['serial_number'] == serial_number]
         interesting_rows[serial_number] = interesting_row
-    return (interesting_rows, new_serial_numbers)
+    return interesting_rows, new_serial_numbers
 
 
 def main():
     # Variables
-    disk_data = pd.DataFrame()
     file_list = os.listdir('data')
-    serial_numbers = []
-    history_length = 60
+    history_length = 90
+    max_date = None
+
+    parser = argparse.ArgumentParser(description='BackBlaze data parser.')
+    parser.add_argument("-v", "--maxdate", help="max date")
+    args = parser.parse_args()
+    if args.maxdate:
+        max_date = datetime.strptime(args.maxdate, '%Y-%m-%d')
 
     for idx, file in enumerate((sorted(file_list, reverse=True))):
+        serial_numbers = []
         print(f'Computing {file}')
-        if os.path.exists(f'results/{file[:10]}'):
-            print("Already done")
-            continue
+        if max_date is not None:
+            if datetime.strptime(file[:10], '%Y-%m-%d') > max_date:
+                continue
 
         dataframe = csv_to_dataframe(file)
         failures_dataframe = dataframe[(dataframe["failure"] == 1)]
@@ -65,6 +74,13 @@ def main():
         if not failures_dataframe.empty:
             for index, row in failures_dataframe.iterrows():
                 serial_numbers.append(dataframe.iloc[index]['serial_number'])
+
+            for serial_number in serial_numbers.copy():
+                if os.path.exists(f'results/{file[:10]}/{serial_number}_{history_length}.csv'):
+                    print(f'File already exists : results/{file[:10]}/{serial_number}_{history_length}.csv')
+                    serial_numbers.remove(serial_number)
+            if not serial_numbers:
+                continue
 
             if idx + history_length >= len(file_list):
                 print("Cannot continue, too few files to continue")
@@ -76,13 +92,12 @@ def main():
 
             with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
                 futures = [executor.submit(parse_file, file_name, serial_numbers) for file_name in
-                           sorted(file_list, reverse=True)[idx:idx+60]]
+                           sorted(file_list, reverse=True)[idx:idx+history_length]]
                 for future in tqdm(as_completed(futures), total=len(futures)):
                     try:
                         data = future.result()
                         if data is not None:
                             rows = merge_dictionary(rows, data[0])
-                            serial_numbers
                     except Exception as exc:
                         print(f'Parsing generated an exception: {exc}')
 
@@ -92,8 +107,7 @@ def main():
                 disk_data['date'] = pd.to_datetime(disk_data['date'])
                 disk_data = disk_data.sort_values(by='date', ascending=False)
                 os.makedirs(f'results/{file[:10]}', exist_ok=True)
-                disk_data.to_csv(f'results/{file[:10]}/{serial_number}.csv', sep=",")
-                disk_data = pd.DataFrame()
+                disk_data.to_csv(f'results/{file[:10]}/{serial_number}_{history_length}.csv', sep="\t", decimal=",")
             print()
 
 

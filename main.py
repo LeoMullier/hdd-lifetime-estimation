@@ -21,11 +21,10 @@ def merge_dictionary(dict1, dict2):
     """Merge two dictionaries."""
     merged_dict = dict1.copy()
     for key, value in dict2.items():
-        if key in merged_dict:
-            if isinstance(merged_dict[key], list):
-                merged_dict[key].append(value)
-            else:
-                merged_dict[key] = [merged_dict[key], value]
+        if key in merged_dict and datetime.strptime(
+            merged_dict[key]['file'][:10], '%Y-%m-%d'
+        ) > datetime.strptime(value['file'][:10], '%Y-%m-%d'):
+            merged_dict[key] = value
         else:
             merged_dict[key] = value
     return merged_dict

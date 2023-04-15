@@ -17,14 +17,25 @@ import pandas as pd
 from tqdm import tqdm
 
 
-def merge_dictionary(dict1, dict2):
+def merge_dictionary(sn_dict_1, sn_dict_2):
     """Merge two dictionaries."""
-    merged_dict = dict1.copy()
-    for key, value in dict2.items():
-        if key in merged_dict and datetime.strptime(
-            merged_dict[key]['file'][:10], '%Y-%m-%d'
-        ) > datetime.strptime(value['file'][:10], '%Y-%m-%d'):
-            merged_dict[key] = value
+    merged_dict = sn_dict_1.copy()
+    for key, value in sn_dict_2.items():
+        if key in merged_dict:
+            if not (isinstance(merged_dict[key], dict) and isinstance(value, dict)):
+                continue
+            if 'file' in merged_dict[key].keys() and 'file' in value.keys():
+                if datetime.strptime(merged_dict[key]['file'][:10], '%Y-%m-%d') > datetime.strptime(
+                    value['file'][:10], '%Y-%m-%d'
+                ):
+                    merged_dict[key]['file'] = value['file']
+            if not ('start_date' in merged_dict[key].keys()) and 'start_date' in value.keys():
+                merged_dict[key]['start_date'] = value['start_date']
+            if 'start_date' in merged_dict[key].keys() and 'start_date' in value.keys():
+                if datetime.strptime(value['start_date'][:10], '%Y-%m-%d') < datetime.strptime(
+                    merged_dict[key]['start_date'][:10], '%Y-%m-%d'
+                ):
+                    merged_dict[key]['start_date'] = value['start_date']
         else:
             merged_dict[key] = value
     return merged_dict
@@ -50,16 +61,18 @@ def get_first_file_date():
     return get_data_files()[0][:10]
 
 
-def get_start_file_from_serial_numbers(sn_dict, iteration_id):
+def split_list(lst, n):
+    """Divise une liste en n parties égales (ou presque égales)."""
+    k, m = divmod(len(lst), n)
+    return [lst[i * k + min(i, m) : (i + 1) * k + min(i + 1, m)] for i in range(n)]
+
+
+def get_start_files(sn_dict):
     """Return serial numbers first appearance in data files."""
     print('\nLooking for start file')
     data_files = get_data_files()
     sn_not_computed = []
-    process_file_name = f'start_file_{iteration_id}_{data_files[0][:10]}.json'
-
-    # Init dict
-    for serial_number in sn_dict.keys():
-        sn_dict[serial_number]['start_file'] = {'min': 0, 'max': len(data_files) - 1}
+    process_file_name = f'start_file_{data_files[0][:10]}.json'
 
     # Get Info from old run
     if os.path.isfile(f'process/{process_file_name}'):
@@ -68,51 +81,71 @@ def get_start_file_from_serial_numbers(sn_dict, iteration_id):
             process_data = json.load(process_file)
         for serial_number in sn_dict.keys():
             if serial_number in process_data.keys():
-                sn_dict[serial_number]['start_file'] = process_data[serial_number]['start_file']
-                if isinstance(sn_dict[serial_number]['start_file'], dict):
+                if 'start_file' in process_data[serial_number].keys():
+                    if process_data[serial_number]['start_file'] is not None:
+                        sn_dict[serial_number]['start_file'] = process_data[serial_number][
+                            'start_file'
+                        ]
+                else:
                     sn_not_computed.append(serial_number)
-            else:
-                sn_not_computed.append(serial_number)
+                    sn_dict[serial_number]['start_file'] = None
     else:
-        sn_not_computed = sn_dict.keys()
+        sn_not_computed = list(sn_dict.keys())
 
+    # Remove serial_numbers that cannot be processed
+    print('Remove serial_numbers that cannot be processed, (too few files)')
+    dataframe = pd.read_csv(f'data/{data_files[0]}')
+    existing_serial_numbers = dataframe['serial_number'].values
+    for serial_number in tqdm(sn_not_computed.copy()):
+        if serial_number in existing_serial_numbers:
+            sn_not_computed.remove(serial_number)
+            sn_dict[serial_number]['start_file'] = None
+    print()
+
+    print('Getting start file')
     if sn_not_computed:
         # Process
-        with ProcessPoolExecutor() as executor:
-            futures = []
-            for serial_number in sn_not_computed:
-                futures.append(
-                    executor.submit(get_start_file_from_serial_number, serial_number, data_files)
-                )
+        with mp.Manager() as manager:
+            with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
+                futures = [
+                    executor.submit(get_start_files_process, sn_not_computed, data_file)
+                    for data_file in data_files
+                ]
+                for future in tqdm(as_completed(futures), total=len(futures)):
+                    sn_found_list, data_file = future.result()
+                    for sn_found in sn_found_list:
+                        if 'start_file' not in sn_dict[sn_found]:
+                            sn_dict[sn_found]['start_file'] = data_file
+                        elif datetime.strptime(data_file[:10], '%Y-%m-%d') < datetime.strptime(
+                            sn_dict[sn_found]['start_file'][:10], '%Y-%m-%d'
+                        ):
+                            sn_dict[sn_found]['start_file'] = data_file
 
-            for future in tqdm(futures):
-                serial_number, start_file = future.result()
-                sn_dict[serial_number]['start_file'] = start_file
+                    # Saving for next run
+                    os.makedirs('process', exist_ok=True)
+                    with open(
+                        f'process/{process_file_name}', 'w', encoding='utf-8'
+                    ) as process_file:
+                        json.dump(sn_dict, process_file)
 
-                # Saving for next run
-                os.makedirs('process', exist_ok=True)
-                with open(f'process/{process_file_name}', 'w', encoding='utf-8') as process_file:
-                    json.dump(sn_dict, process_file)
+    # Saving for next run
+    os.makedirs('process', exist_ok=True)
+    with open(f'process/{process_file_name}', 'w', encoding='utf-8') as process_file:
+        json.dump(sn_dict, process_file)
 
     return sn_dict
 
 
-def get_start_file_from_serial_number(serial_number, data_files):
+def get_start_files_process(sn_to_process, data_file):
     """Return serial number first appearance in data files."""
-    min_index = 0
-    max_index = len(data_files) - 1
+    sn_found = []
+    dataframe = pd.read_csv(f'data/{data_file}')
+    existing_serial_numbers = dataframe['serial_number'].values
+    for serial_number in sn_to_process:
+        if serial_number in existing_serial_numbers:
+            sn_found.append(serial_number)
 
-    while min_index != max_index:
-        index = (min_index + max_index) // 2
-        dataframe = pd.read_csv(f'data/{data_files[index]}')
-        interesting_row = dataframe.loc[dataframe['serial_number'] == serial_number]
-        if interesting_row.empty:
-            min_index = index + 1
-        else:
-            max_index = min(index, max_index)
-
-    start_file = data_files[max_index]
-    return serial_number, start_file
+    return sn_found, data_file
 
 
 def parse_file(filename, serial_numbers):
@@ -129,11 +162,11 @@ def parse_file(filename, serial_numbers):
     return results_df
 
 
-def parse_files(files_to_open, iteration_id):
+def parse_files(files_to_open):
     """Parse input csv files from BackBlaze."""
     results_df = pd.DataFrame()
     data_files = get_data_files()
-    process_file_name = f'parsed_data_{iteration_id}_{data_files[0][:10]}.json'
+    process_file_name = f'parsed_data_{data_files[0][:10]}.json'
     print('\nOpening files to get history')
 
     # Get Info from old run
@@ -189,17 +222,17 @@ def get_failed_serial_number_from_file(file):
     return serial_numbers
 
 
-def get_failed_serial_number_from_files(files_to_process, iteration_id):
+def get_failed_serial_number_from_files(files_to_process):
     """Check failures presence in dataframe."""
-    serial_numbers = {}
+    sn_dict = {}
     data_files = get_data_files()
-    process_file_name = f'failed_sn_{iteration_id}_{data_files[0][:10]}.json'
+    process_file_name = f'failed_sn_{data_files[0][:10]}.json'
     print('Getting failed sn...')
 
     # Get Info from old run
     if os.path.isfile(f'process/{process_file_name}'):
         with open(f'process/{process_file_name}', 'r', encoding='utf-8') as process_file:
-            serial_numbers = json.load(process_file)
+            sn_dict = json.load(process_file)
     else:
         with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
             futures = [
@@ -208,26 +241,26 @@ def get_failed_serial_number_from_files(files_to_process, iteration_id):
             ]
             for future in tqdm(as_completed(futures), total=len(futures)):
                 try:
-                    data = future.result()
-                    if data is not None:
-                        serial_numbers = merge_dictionary(serial_numbers, data)
+                    new_sn_dict = future.result()
+                    if new_sn_dict is not None:
+                        sn_dict = merge_dictionary(sn_dict, new_sn_dict)
                 except Exception as exc:  # pylint: disable=broad-except
                     print(f'Parsing generated an exception: {exc}')
 
     # Saving for next run
     os.makedirs('process', exist_ok=True)
     with open(f'process/{process_file_name}', 'w', encoding='utf-8') as process_file:
-        json.dump(serial_numbers, process_file, indent=4)
+        json.dump(sn_dict, process_file, indent=4)
 
-    print(f'{len(serial_numbers)} serial numbers found')
-    return serial_numbers
+    print(f'{len(sn_dict)} serial numbers found')
+    return sn_dict
 
 
-def get_files_to_open(sn_dict, iteration_id, history_length_recent, history_length_old):
+def get_files_to_open(sn_dict, history_length_recent, history_length_old):
     """Return list of files to open."""
     print('\nGetting files to open')
     data_files = get_data_files()
-    process_file_name = f'files_to_open_{iteration_id}_{data_files[0][:10]}.json'
+    process_file_name = f'files_to_open_{data_files[0][:10]}.json'
     files_to_open = {}
 
     if os.path.isfile(f'process/{process_file_name}'):
@@ -264,12 +297,16 @@ def get_files_to_open(sn_dict, iteration_id, history_length_recent, history_leng
     return files_to_open
 
 
-def create_csv_file(serial_number, info_dict, results_df):
+def create_csv_file(serial_number, sn_dict, disk_df):
     """Generate csv file."""
-    disk_df = results_df[(results_df['serial_number'] == serial_number)]
+    if serial_number not in sn_dict.keys():
+        return
+    if sn_dict[serial_number]['result_filename'] is None:
+        return
+    print(sn_dict[serial_number])
     disk_df = disk_df.sort_values(by='date', ascending=False)
     os.makedirs('results/', exist_ok=True)
-    result_filename = info_dict['result_filename']
+    result_filename = sn_dict[serial_number]['result_filename']
     disk_df.to_csv(
         f'results/{result_filename}',
         sep='\t',
@@ -284,33 +321,24 @@ def create_csv_files(sn_dict, results_df):
         futures = [
             executor.submit(
                 create_csv_file,
-                serial_number_dict,
-                info_dict,
-                results_df,
+                serial_number,
+                sn_dict,
+                disk_df,
             )
-            for serial_number_dict, info_dict in sn_dict.items()
+            for serial_number, disk_df in results_df.groupby('serial_number')
         ]
         for _ in tqdm(as_completed(futures), total=len(futures)):
             pass
 
 
-def remove_sn_without_enough_history(sn_dict):
-    """Remove sn without enough history."""
-    print('\nRemoving sn without enough history to succeed')
-    new_sn_dict = {}
-    older_file = get_data_files()[0]
-
-    for serial_number, info_dict in sn_dict.items():
-        if info_dict['start_file'] != older_file:
-            new_sn_dict[serial_number] = info_dict
-
-    print(f'{len(new_sn_dict.keys())} serial numbers left')
-    return new_sn_dict
-
-
 def set_result_filename(sn_dict, history_length_recent, history_length_old):
     """Set result csv filename."""
     for serial_number in sn_dict.keys():
+        if 'start_file' not in sn_dict[serial_number].keys():
+            continue
+        if sn_dict[serial_number]['start_file'] is None:
+            sn_dict[serial_number]['result_filename'] = None
+            continue
         prefix = (
             str(sn_dict[serial_number]['file'][:10])
             + '_'
@@ -339,7 +367,6 @@ def process(process_size, history_length_recent, history_length_old):
             files_to_process = data_files[index * process_size :]
         else:
             files_to_process = data_files[index * process_size : (index + 1) * process_size]
-        iteration_id = f'{process_size}_{index}'
 
         # Display
         text = f'Computing files from {files_to_process[-1]} to {files_to_process[0]}'
@@ -349,26 +376,24 @@ def process(process_size, history_length_recent, history_length_old):
         print(line)
 
         # Get failed serial-numbers
-        sn_dict = get_failed_serial_number_from_files(files_to_process, iteration_id)
+        sn_dict = get_failed_serial_number_from_files(files_to_process)
         if not sn_dict:
             print('No sn found !')
             continue
 
         # look for first apparition date
-        sn_dict = get_start_file_from_serial_numbers(sn_dict, iteration_id)
-
-        # Remove sn with no enough data history
-        sn_dict = remove_sn_without_enough_history(sn_dict)
-        if not sn_dict:
-            print('No more sn -> too few old files !')
-            continue
+        sn_dict = get_start_files(sn_dict)
 
         # Set result filename
         sn_dict = set_result_filename(sn_dict, history_length_recent, history_length_old)
 
         # Skip all serial numbers already processed
         for serial_number in list(sn_dict.keys()).copy():
-            if os.path.isfile('results/' + sn_dict[serial_number]['result_filename']):
+            if 'result_filename' not in sn_dict[serial_number]:
+                continue
+            if sn_dict[serial_number]['result_filename'] is None:
+                del sn_dict[serial_number]
+            elif os.path.isfile('results/' + sn_dict[serial_number]['result_filename']):
                 del sn_dict[serial_number]
         if not bool(sn_dict):
             print('All serial numbers csv files exist in result folder\n\n')
@@ -378,13 +403,12 @@ def process(process_size, history_length_recent, history_length_old):
         # For most recent history
         files_to_open = get_files_to_open(
             sn_dict,
-            iteration_id,
             history_length_recent,
             history_length_old,
         )
 
         # Parsing files to get history
-        results_df = parse_files(files_to_open, iteration_id)
+        results_df = parse_files(files_to_open)
         if results_df is None:
             continue
 

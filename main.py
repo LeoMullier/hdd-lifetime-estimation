@@ -106,6 +106,8 @@ def get_start_files(sn_dict):
         for serial_number in sn_dict.keys():
             if serial_number in process_data.keys():
                 if 'start_file' in process_data[serial_number].keys():
+                    if process_data[serial_number]['start_file'] is None:
+                        sn_not_computed.append(serial_number)
                     sn_dict[serial_number]['start_file'] = process_data[serial_number]['start_file']
                 else:
                     sn_not_computed.append(serial_number)
@@ -127,26 +129,23 @@ def get_start_files(sn_dict):
 
     print('\nGetting start file')
     if sn_not_computed:
-        # Process
-        with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
-            futures = [
-                executor.submit(get_start_files_process, sn_not_computed, data_file)
-                for data_file in data_files
-            ]
-            for future in tqdm(as_completed(futures), total=len(futures)):
-                sn_found_list, data_file = future.result()
-                for sn_found in sn_found_list:
-                    if 'start_file' not in sn_dict[sn_found]:
-                        sn_dict[sn_found]['start_file'] = data_file
-                    elif datetime.strptime(data_file[:10], '%Y-%m-%d') < datetime.strptime(
-                        sn_dict[sn_found]['start_file'][:10], '%Y-%m-%d'
-                    ):
-                        sn_dict[sn_found]['start_file'] = data_file
+        for data_file in tqdm(data_files):
+            sn_found_list, data_file = get_start_files_process(sn_not_computed, data_file)
+            for sn_found in sn_found_list:
+                sn_not_computed.remove(sn_found)
+                if 'start_file' not in sn_dict[sn_found]:
+                    sn_dict[sn_found]['start_file'] = data_file
+                elif sn_dict[sn_found]['start_file'] is None:
+                    sn_dict[sn_found]['start_file'] = data_file
+                elif datetime.strptime(data_file[:10], '%Y-%m-%d') < datetime.strptime(
+                    sn_dict[sn_found]['start_file'][:10], '%Y-%m-%d'
+                ):
+                    sn_dict[sn_found]['start_file'] = data_file
 
-                # Saving for next run
-                os.makedirs('process', exist_ok=True)
-                with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:
-                    json.dump(sn_dict, process_file)
+            # Saving for next run
+            os.makedirs('process', exist_ok=True)
+            with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:
+                json.dump(sn_dict, process_file)
 
     # Saving for next run
     os.makedirs('process', exist_ok=True)
@@ -158,12 +157,9 @@ def get_start_files(sn_dict):
 
 def get_start_files_process(sn_to_process, data_file):
     """Return serial number first appearance in data files."""
-    sn_found = []
     dataframe = parquet_to_dataframe(data_file)
     existing_serial_numbers = dataframe['serial_number'].values
-    for serial_number in sn_to_process:
-        if serial_number in existing_serial_numbers:
-            sn_found.append(serial_number)
+    sn_found = list(set(sn_to_process) & set(existing_serial_numbers))
 
     return sn_found, data_file
 
@@ -233,8 +229,6 @@ def get_failed_serial_number_from_file(file):
 
     dataframe = parquet_to_dataframe(file)
     failures_dataframe = dataframe[(dataframe['failure'] == 1)]
-    if failures_dataframe.empty:
-        return file, []
     for index, _ in failures_dataframe.iterrows():
         serial_numbers.append(dataframe.iloc[index]['serial_number'])
 
@@ -253,23 +247,18 @@ def get_failed_serial_number_from_files(files_to_process):
         with open(PROCESS_DIR + process_file_name, 'r', encoding='utf-8') as process_file:
             sn_dict = json.load(process_file)
     else:
-        with ProcessPoolExecutor(max_workers=mp.cpu_count() // 2) as executor:
-            futures = [
-                executor.submit(get_failed_serial_number_from_file, file)
-                for file in files_to_process
-            ]
-            for future in tqdm(as_completed(futures), total=len(futures)):
-                file, serial_numbers = future.result()
-                if serial_numbers:
-                    for serial_number in serial_numbers:
-                        if serial_number not in sn_dict:
-                            sn_dict[serial_number] = {'file': file}
-                        if not isinstance(sn_dict[serial_number], dict):
-                            sn_dict[serial_number] = {'file': file}
-                        elif datetime.strptime(
-                            sn_dict[serial_number]['file'][:10], '%Y-%m-%d'
-                        ) < datetime.strptime(file[:10], '%Y-%m-%d'):
-                            sn_dict[serial_number]['file'] = file
+        for file in tqdm(files_to_process):
+            file, serial_numbers = get_failed_serial_number_from_file(file)
+            if serial_numbers:
+                for serial_number in serial_numbers:
+                    if serial_number not in sn_dict:
+                        sn_dict[serial_number] = {'file': file}
+                    if not isinstance(sn_dict[serial_number], dict):
+                        sn_dict[serial_number] = {'file': file}
+                    elif datetime.strptime(
+                        sn_dict[serial_number]['file'][:10], '%Y-%m-%d'
+                    ) < datetime.strptime(file[:10], '%Y-%m-%d'):
+                        sn_dict[serial_number]['file'] = file
 
     # Saving for next run
     with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:

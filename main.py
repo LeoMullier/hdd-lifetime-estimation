@@ -16,38 +16,92 @@ from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
 
+CSV_DIR = 'data/csv/'
+PARQUET_DIR = 'data/parquet/'
+PROCESS_DIR = 'process/'
+
+
+def convert_csv_to_parquet(csv_file_name):
+    """Convert csv to parquet files."""
+    csv_path = os.path.join(CSV_DIR, csv_file_name)
+    parquet_path = os.path.join(PARQUET_DIR, csv_file_name.replace('.csv', '.parquet'))
+
+    if not os.path.exists(parquet_path):
+        dataframe = pd.read_csv(csv_path)
+        dataframe.to_parquet(parquet_path, compression=None)
+
+
+def convert_csvs_to_parquets():
+    """Convert csv to parquet files."""
+    print('Converting csv to parquet files...')
+    csv_files = get_csv_data_files()
+
+    for csv_file in csv_files.copy():
+        if os.path.exists(os.path.join(PARQUET_DIR, csv_file.replace('.csv', '.parquet'))):
+            csv_files.remove(csv_file)
+
+    if csv_files:
+        with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
+            futures = [
+                executor.submit(convert_csv_to_parquet, csv_file_name)
+                for csv_file_name in csv_files
+            ]
+
+            for _ in tqdm(as_completed(futures), total=len(futures)):
+                pass
+    print('All csv files have been converted to parquet files...')
+
 
 def csv_to_dataframe(csv_name) -> pd.DataFrame:
     """Transform a csv to a dataframe object."""
     try:
-        dataframe = pd.read_csv('data/' + csv_name)
+        dataframe = pd.read_csv(CSV_DIR + csv_name)
         return dataframe
     except (Exception,):  # pylint: disable=broad-except
         print(f'Cannot read {csv_name}')
+        if input('Delete file ? (y/n)') == 'y':
+            os.remove(CSV_DIR + csv_name)
         sys.exit(1)
 
 
-def get_data_files(reverse=False):
+def parquet_to_dataframe(parquet_name) -> pd.DataFrame:
+    """Transform a csv to a dataframe object."""
+    try:
+        dataframe = pd.read_parquet(PARQUET_DIR + parquet_name)
+        return dataframe
+    except (Exception,):  # pylint: disable=broad-except
+        print(f'Cannot read {PARQUET_DIR + parquet_name}')
+        sys.exit(1)
+
+
+def get_csv_data_files(reverse=False):
     """Return data csv files list from data folder."""
-    return sorted((file for file in os.listdir('data') if file.endswith('.csv')), reverse=reverse)
+    return sorted((file for file in os.listdir(CSV_DIR) if file.endswith('.csv')), reverse=reverse)
+
+
+def get_parquet_data_files(reverse=False):
+    """Return data parquet files list from data folder."""
+    return sorted(
+        (file for file in os.listdir(PARQUET_DIR) if file.endswith('.parquet')), reverse=reverse
+    )
 
 
 def get_first_file_date():
     """Return older file date."""
-    return get_data_files()[0][:10]
+    return get_parquet_data_files()[0][:10]
 
 
 def get_start_files(sn_dict):
     """Return serial numbers first appearance in data files."""
     print('\nLooking for start file')
-    data_files = get_data_files()
+    data_files = get_parquet_data_files()
     sn_not_computed = []
     process_file_name = f'start_file_{data_files[0][:10]}.json'
 
     # Get Info from old run
-    if os.path.isfile(f'process/{process_file_name}'):
+    if os.path.isfile(PROCESS_DIR + process_file_name):
         print(f'Found process file : {process_file_name}')
-        with open(f'process/{process_file_name}', 'r', encoding='utf-8') as process_file:
+        with open(PROCESS_DIR + process_file_name, 'r', encoding='utf-8') as process_file:
             process_data = json.load(process_file)
         for serial_number in sn_dict.keys():
             if serial_number in process_data.keys():
@@ -58,10 +112,12 @@ def get_start_files(sn_dict):
                     sn_dict[serial_number]['start_file'] = None
     else:
         sn_not_computed = list(sn_dict.keys())
+        for serial_number in sn_dict.keys():
+            sn_dict[serial_number]['start_file'] = None
 
     # Remove serial_numbers that cannot be processed
     print('Remove serial_numbers that cannot be processed, (too few files)')
-    dataframe = pd.read_csv(f'data/{data_files[0]}')
+    dataframe = parquet_to_dataframe(data_files[0])
     existing_serial_numbers = dataframe['serial_number'].values
     for serial_number in tqdm(sn_not_computed.copy()):
         if serial_number in existing_serial_numbers:
@@ -89,12 +145,12 @@ def get_start_files(sn_dict):
 
                 # Saving for next run
                 os.makedirs('process', exist_ok=True)
-                with open(f'process/{process_file_name}', 'w', encoding='utf-8') as process_file:
+                with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:
                     json.dump(sn_dict, process_file)
 
     # Saving for next run
     os.makedirs('process', exist_ok=True)
-    with open(f'process/{process_file_name}', 'w', encoding='utf-8') as process_file:
+    with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:
         json.dump(sn_dict, process_file)
 
     return sn_dict
@@ -103,7 +159,7 @@ def get_start_files(sn_dict):
 def get_start_files_process(sn_to_process, data_file):
     """Return serial number first appearance in data files."""
     sn_found = []
-    dataframe = pd.read_csv(f'data/{data_file}')
+    dataframe = parquet_to_dataframe(data_file)
     existing_serial_numbers = dataframe['serial_number'].values
     for serial_number in sn_to_process:
         if serial_number in existing_serial_numbers:
@@ -112,10 +168,10 @@ def get_start_files_process(sn_to_process, data_file):
     return sn_found, data_file
 
 
-def parse_file(filename, serial_numbers):
+def parse_file(file_path, serial_numbers):
     """Parse input csv file from BackBlaze."""
     results_df = pd.DataFrame()
-    dataframe = csv_to_dataframe(filename)
+    dataframe = parquet_to_dataframe(file_path)
 
     for serial_number in serial_numbers:
         interesting_row = dataframe.loc[dataframe['serial_number'] == serial_number]
@@ -129,13 +185,13 @@ def parse_file(filename, serial_numbers):
 def parse_files(files_to_open):
     """Parse input csv files from BackBlaze."""
     results_df = pd.DataFrame()
-    data_files = get_data_files()
+    data_files = get_parquet_data_files()
     process_file_name = f'parsed_data_{data_files[0][:10]}.json'
     print('\nOpening files to get history')
 
     # Get Info from old run
-    if os.path.isfile(f'process/{process_file_name}'):
-        with open(f'process/{process_file_name}', 'rb') as process_file:
+    if os.path.isfile(PROCESS_DIR + process_file_name):
+        with open(PROCESS_DIR + process_file_name, 'rb') as process_file:
             print(f'Found process file : {process_file_name}')
             results_df = pickle.load(process_file)
     else:
@@ -158,8 +214,7 @@ def parse_files(files_to_open):
         results_df['date'] = pd.to_datetime(results_df['date'])
 
         # Saving for next run
-        os.makedirs('process', exist_ok=True)
-        with open(f'process/{process_file_name}', 'wb') as process_file:
+        with open(PROCESS_DIR + process_file_name, 'wb') as process_file:
             pickle.dump(results_df, process_file)
 
     return results_df
@@ -176,7 +231,7 @@ def get_failed_serial_number_from_file(file):
     """Get failed serial numbers list from file."""
     serial_numbers = []
 
-    dataframe = csv_to_dataframe(file)
+    dataframe = parquet_to_dataframe(file)
     failures_dataframe = dataframe[(dataframe['failure'] == 1)]
     if failures_dataframe.empty:
         return file, []
@@ -189,39 +244,35 @@ def get_failed_serial_number_from_file(file):
 def get_failed_serial_number_from_files(files_to_process):
     """Check failures presence in dataframe."""
     sn_dict = {}
-    data_files = get_data_files()
+    data_files = get_parquet_data_files()
     process_file_name = f'failed_sn_{data_files[0][:10]}.json'
     print('Getting failed sn...')
 
     # Get Info from old run
-    if os.path.isfile(f'process/{process_file_name}'):
-        with open(f'process/{process_file_name}', 'r', encoding='utf-8') as process_file:
+    if os.path.isfile(PROCESS_DIR + process_file_name):
+        with open(PROCESS_DIR + process_file_name, 'r', encoding='utf-8') as process_file:
             sn_dict = json.load(process_file)
     else:
-        with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
+        with ProcessPoolExecutor(max_workers=mp.cpu_count() // 2) as executor:
             futures = [
                 executor.submit(get_failed_serial_number_from_file, file)
                 for file in files_to_process
             ]
             for future in tqdm(as_completed(futures), total=len(futures)):
-                try:
-                    file, serial_numbers = future.result()
-                    if serial_numbers:
-                        for serial_number in serial_numbers:
-                            if serial_number not in sn_dict or not isinstance(
-                                sn_dict[serial_number], dict
-                            ):
-                                sn_dict[serial_number] = {'file': file}
-                            elif datetime.strptime(
-                                sn_dict[serial_number]['file'][:10], '%Y-%m-%d'
-                            ) < datetime.strptime(file[:10], '%Y-%m-%d'):
-                                sn_dict[serial_number]['file'] = file
-                except Exception as exc:  # pylint: disable=broad-except
-                    print(f'Parsing generated an exception: {exc}')
+                file, serial_numbers = future.result()
+                if serial_numbers:
+                    for serial_number in serial_numbers:
+                        if serial_number not in sn_dict:
+                            sn_dict[serial_number] = {'file': file}
+                        if not isinstance(sn_dict[serial_number], dict):
+                            sn_dict[serial_number] = {'file': file}
+                        elif datetime.strptime(
+                            sn_dict[serial_number]['file'][:10], '%Y-%m-%d'
+                        ) < datetime.strptime(file[:10], '%Y-%m-%d'):
+                            sn_dict[serial_number]['file'] = file
 
     # Saving for next run
-    os.makedirs('process', exist_ok=True)
-    with open(f'process/{process_file_name}', 'w', encoding='utf-8') as process_file:
+    with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:
         json.dump(sn_dict, process_file, indent=4)
 
     print(f'{len(sn_dict)} serial numbers found')
@@ -231,12 +282,12 @@ def get_failed_serial_number_from_files(files_to_process):
 def get_files_to_open(sn_dict, history_length_recent, history_length_old):
     """Return list of files to open."""
     print('\nGetting files to open')
-    data_files = get_data_files()
+    data_files = get_parquet_data_files()
     process_file_name = f'files_to_open_{data_files[0][:10]}.json'
     files_to_open = {}
 
-    if os.path.isfile(f'process/{process_file_name}'):
-        with open(f'process/{process_file_name}', 'r', encoding='utf-8') as process_file:
+    if os.path.isfile(PROCESS_DIR + process_file_name):
+        with open(PROCESS_DIR + process_file_name, 'r', encoding='utf-8') as process_file:
             print(f'Found process file : {process_file_name}')
             return json.load(process_file)
 
@@ -261,7 +312,7 @@ def get_files_to_open(sn_dict, history_length_recent, history_length_old):
                 else:
                     files_to_open[file_to_open] = [serial_number]
 
-    with open(f'process/{process_file_name}', 'w', encoding='utf-8') as process_file:
+    with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:
         json.dump(files_to_open, process_file, indent=4)
 
     print(f'{len(files_to_open.keys())} files to open')
@@ -306,8 +357,6 @@ def create_csv_files(sn_dict, results_df):
 def set_result_filename(sn_dict, history_length_recent, history_length_old):
     """Set result csv filename."""
     for serial_number in sn_dict.keys():
-        if 'start_file' not in sn_dict[serial_number].keys():
-            continue
         if sn_dict[serial_number]['start_file'] is None:
             sn_dict[serial_number]['result_filename'] = None
             continue
@@ -328,7 +377,8 @@ def set_result_filename(sn_dict, history_length_recent, history_length_old):
 def process(process_size, history_length_recent, history_length_old):
     """Process data_files."""
     # Variables
-    data_files = get_data_files(True)
+    convert_csvs_to_parquets()
+    data_files = get_parquet_data_files(True)
     files_to_process = data_files[:process_size]
     index = -1
 
@@ -364,8 +414,6 @@ def process(process_size, history_length_recent, history_length_old):
 
         # Skip all serial numbers already processed
         for serial_number in list(sn_dict.keys()).copy():
-            if 'result_filename' not in sn_dict[serial_number]:
-                continue
             if sn_dict[serial_number]['result_filename'] is None:
                 del sn_dict[serial_number]
             elif os.path.isfile('results/' + sn_dict[serial_number]['result_filename']):
@@ -417,6 +465,10 @@ def main():
     )
 
     args = parser.parse_args()
+
+    os.makedirs(PROCESS_DIR, exist_ok=True)
+    os.makedirs(CSV_DIR, exist_ok=True)
+    os.makedirs(PARQUET_DIR, exist_ok=True)
 
     process(args.process_size, args.history_length_recent, args.history_length_old)
 

@@ -1,4 +1,4 @@
-data/
-results/
+data/*
+results/*
 process/*
 raw/

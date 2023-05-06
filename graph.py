@@ -7,6 +7,8 @@ from urllib.parse import urljoin, urlparse
 import csv
 import io
 import numpy as np
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 def parcourir_liens_recursif(url):
     fichiers = []
@@ -190,19 +192,98 @@ def tracer_dico(dico):
         plt.legend()
         plt.show(block=False)
         
-    
+dico_duree_vie = {}
+nbdisque = 0
+
+def ajouter_colonne_duree_vie(fichier):
+    global nbdisque
+    for f in fichier:
+        df = pd.read_csv(f, sep="\t")
+        if(len(df)>90):
+            nbdisque += 1
+            date_début_str = df.iloc[-1]['date']
+            date_début = datetime.strptime(date_début_str, '%Y-%m-%d').date()
+
+            date_fin_str = df.iloc[0]['date']
+            date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
+
+            difference = relativedelta(date_fin, date_début)
+
+            id = df.iloc[0]['serial_number']
+            dico_duree_vie[id] = round(difference.months + difference.years * 12,0)
+
+        # df.to_csv(f, sep="\t", index=False, columns=list(df.columns) + ['duree_vie'])
+        
+
+dico_baignoire = {}
+
+def courbe_baignoire():
+    for i,m in dico_duree_vie.items():
+        if m not in dico_baignoire:
+            dico_baignoire[m] =1
+        else: 
+            dico_baignoire[m] +=1
+
+def tracer_courbe_de_vie():
+    x = sorted(dico_baignoire.keys())
+
+    # On récupère les fréquences correspondantes
+    y = [dico_baignoire[mois] for mois in x]
+
+    # On trace la courbe
+    plt.plot(x, y,'.')
+
+    plt.yticks(range(min(y), max(y)+1, 10))
+
+    # On ajoute des titres et des étiquettes d'axes
+    plt.title("Courbe de vie")
+    plt.xlabel("Mois")
+    plt.ylabel("Fréquence")
+
+    # On affiche le graphique
+    plt.show()
 
 
-#om_fichier = "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\results"
+
+def tracer_courbe_baignoire():
+    global nbdisque
+# Calcul du nombre cumulatif de défaillances
+    x = sorted(dico_baignoire.keys())
+    y = [dico_baignoire[mois]/ nbdisque for mois in x]
+
+    # Tracer la courbe de taux de défaillance cumulatif
+    plt.plot(x, y, '.')
+
+    # Ajouter des titres et des étiquettes d'axes
+    plt.title("Taux de défaillance")
+    plt.xlabel("Temps (en mois)")
+    plt.ylabel("Taux de défaillance")
+
+    # Afficher le graphique
+    plt.show()
+
+
+# ====================     Variables     ==================== 
+
+#nom_fichier = "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\results"
 nom_fichier = "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\Fichier_csvV.3"
 
 fichier_chemin = parcourir_repertoire(nom_fichier)
 
 
-#print(fichier_chemin)
+
+# ====================     Données smart     ==================== 
 
 
 '''
+
+
+
+
+#print(fichier_chemin)
+
+
+
 ecrire_tableau_dans_csv(fichier_chemin, "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\donnee.csv")
 tab = tableau_csv("C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\donnee.csv")
 
@@ -218,7 +299,7 @@ for x in fichier_chemin:
         if(y not in liste):
             liste.append(y)
 
-'''
+
 liste=[]
 autre =['Unnamed: 0', 'serial_number', 'model', 'capacity_bytes','date']
 df = pd.read_csv(fichier_chemin[0], sep="\t")
@@ -226,17 +307,26 @@ for y in df.columns:
     if y not in liste and not y.endswith('normalized') and y not in autre:
         liste.append(y)
 
-#iste=['smart_1_raw','smart_5_raw','smart_188_raw','smart_10_raw','smart_187_raw','smart_190_raw','smart_196_raw','smart_197_raw','smart_198_raw','smart_201_raw','smart_220_raw']
+#liste=['smart_1_raw','smart_5_raw','smart_188_raw','smart_10_raw','smart_187_raw','smart_190_raw','smart_196_raw','smart_197_raw','smart_198_raw','smart_201_raw','smart_220_raw']
 
 
 #liste=['smart_5_raw']
-'''
+
 for col in liste:
         tracer_les_graphs(col,fichier_chemi
-''' 
 
 
 ajouter_colonne_trace(fichier_chemin)
 dictio = remplir_dico_moyenne(fichier_chemin,liste)
 
 tracer_dico(dictio)
+''' 
+
+
+
+# ====================     Courbe en baignoire     ==================== 
+
+ajouter_colonne_duree_vie(fichier_chemin)
+courbe_baignoire()
+#tracer_courbe_de_vie()
+tracer_courbe_baignoire()

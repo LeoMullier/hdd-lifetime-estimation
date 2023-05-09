@@ -8,7 +8,6 @@ import argparse
 import json
 import multiprocessing as mp
 import os
-import pickle
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -163,14 +162,14 @@ def parse_file(file_path, serial_numbers):
 def parse_files(files_to_open):
     """Parse input csv files from BackBlaze."""
     data_files = get_parquet_data_files()
-    process_file_name = f'parsed_data_{data_files[0][:10]}.pickle'
+    process_file_name = f'parsed_data_{data_files[0][:10]}.parquet'
     print('\n---Opening files to get history---')
 
     # Get Info from old run
     if os.path.isfile(PROCESS_DIR + process_file_name):
-        with open(PROCESS_DIR + process_file_name, 'rb') as process_file:
-            print(f'Found process file : {process_file_name}')
-            results_df = pickle.load(process_file)
+        # with open(PROCESS_DIR + process_file_name, 'rb') as process_file:
+        print(f'Found process file : {process_file_name}')
+        results_df = pd.read_parquet(PROCESS_DIR + process_file_name)
     else:
         results_list = []
         for filename, serial_numbers in tqdm(files_to_open.items()):
@@ -180,12 +179,12 @@ def parse_files(files_to_open):
         if not results_list:
             print('Parsing failed. No data available')
             return None
+
         results_df = pd.concat(results_list, ignore_index=True)
         results_df['date'] = pd.to_datetime(results_df['date'])
-
-        # Saving for next run
-        with open(PROCESS_DIR + process_file_name, 'wb') as process_file:
-            pickle.dump(results_df, process_file)
+        del results_list  # Free ram
+        # Needs a lot of ram. You should increase SWAP size before using the program.
+        results_df.to_parquet(PROCESS_DIR + process_file_name)
 
     return results_df
 
@@ -269,6 +268,7 @@ def remove_strange_behaviors(sn_dict: dict):
         for val in sn_dict.values():
             val['strange'] = None
 
+        # Checking if some disks are still ok after a failure, removing them if so
         for file in tqdm(data_files):
             candidates = get_sn_from_file(file, sns_to_check)
             if candidates:
@@ -307,26 +307,36 @@ def get_files_to_open(sn_dict, history_length_recent, history_length_old):
             print(f'Found process file : {process_file_name}')
             return json.load(process_file)
 
-    for serial_number, info_dict in tqdm(sn_dict.items()):
-        # Most recent history
-        failure_date = datetime.strptime(info_dict['file'][:10], '%Y-%m-%d')
-        for idx in range(history_length_recent):
-            file_to_open = (failure_date - timedelta(days=idx)).strftime('%Y-%m-%d') + '.parquet'
-            if file_to_open in data_files:
-                if file_to_open in files_to_open:
-                    files_to_open[file_to_open].append(serial_number)
-                else:
-                    files_to_open[file_to_open] = [serial_number]
+    if history_length_recent == 0 or history_length_old == 0:
+        print('Getting all data from all files for each failure.')
+        for serial_number, info_dict in tqdm(sn_dict.items()):
+            start_date = datetime.strptime(info_dict['start_file'][:10], '%Y-%m-%d')
+            failure_date = datetime.strptime(info_dict['file'][:10], '%Y-%m-%d')
+            delta = failure_date - start_date
+            for idx in range(delta.days + 1):
+                file_to_open = (start_date + timedelta(days=idx)).strftime('%Y-%m-%d') + '.parquet'
+                if file_to_open in data_files:
+                    files_to_open.setdefault(file_to_open, []).append(serial_number)
+    else:
+        for serial_number, info_dict in tqdm(sn_dict.items()):
+            # Most recent history
+            failure_date = datetime.strptime(info_dict['file'][:10], '%Y-%m-%d')
+            for idx in range(history_length_recent):
+                file_to_open = (failure_date - timedelta(days=idx)).strftime(
+                    '%Y-%m-%d'
+                ) + '.parquet'
+                if file_to_open in data_files:
+                    files_to_open.setdefault(file_to_open, []).append(serial_number)
 
-        # Older history
-        start_date = datetime.strptime(info_dict['start_file'][:10], '%Y-%m-%d')
-        for idx in range(history_length_old):
-            file_to_open = (start_date + timedelta(days=idx)).strftime('%Y-%m-%d') + '.parquet'
-            if file_to_open in data_files:
-                if file_to_open in files_to_open:
-                    files_to_open[file_to_open].append(serial_number)
-                else:
-                    files_to_open[file_to_open] = [serial_number]
+            # Older history
+            start_date = datetime.strptime(info_dict['start_file'][:10], '%Y-%m-%d')
+            for idx in range(history_length_old):
+                file_to_open = (start_date + timedelta(days=idx)).strftime('%Y-%m-%d') + '.parquet'
+                if file_to_open in data_files:
+                    if file_to_open in files_to_open:
+                        files_to_open[file_to_open].append(serial_number)
+                    else:
+                        files_to_open[file_to_open] = [serial_number]
 
     with open(PROCESS_DIR + process_file_name, 'w', encoding='utf-8') as process_file:
         json.dump(files_to_open, process_file, indent=4)
@@ -438,7 +448,6 @@ def process(history_length_recent, history_length_old, failure_start_date):
         sys.exit(1)
 
     # Which files do we need to open now ?
-    # For most recent history
     files_to_open = get_files_to_open(
         sn_dict,
         history_length_recent,

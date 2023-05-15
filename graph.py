@@ -1,156 +1,25 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+import math
+import multiprocessing
 import os
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
-import csv
-import io
+import matplotlib.pyplot as plt
 import numpy as np
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
-
-def parcourir_liens_recursif(url):
-    fichiers = []
-
-    # Envoyer une requête GET pour récupérer le contenu de la page HTML
-    r = requests.get(url)
-
-    # Vérifier que la requête a réussi
-    if r.status_code == 200:
-        # Extraire les liens vers les fichiers à partir du contenu HTML
-        soup = BeautifulSoup(r.text, 'html.parser')
-        for lien in soup.find_all('a'):
-            href = lien.get('href')
-            if href.endswith('.txt') or href.endswith('.csv'):
-                url_absolu = urljoin(url, href)
-                fichiers.append(url_absolu)
-            elif len(href) != 3: #juste pour notre cas
-                # Si le lien est relatif, calculer son URL absolue
-                url_absolu = urljoin(url, href)
-                fichiers.extend(parcourir_liens_recursif(url_absolu))
-
-    return fichiers
+import pandas as pd
+from tqdm import tqdm
+from scipy import stats
+from scipy.optimize import curve_fit
+import numpy as np
+from scipy.stats import weibull_min
+import csv
+import argparse
 
 
-def tracer_les_graphs(y,fichier):
-    dos = os.path.dirname(fichier[0])
-    for x in fichier:
-        print(dos)
-        if dos != os.path.dirname(x):
-            dos = os.path.dirname(x)
-            plt.show(block=False)
-            plt.figure()
-            
-         # Charger le fichier CSV
-        df = pd.read_csv(x, sep="\t")
-        df[y] = df[y].apply(lambda x: float(x.replace(',', '.')) if isinstance(x, str) else x)
-        # Créer un graphique à partir des données
+# --------------------- Utilitaire global  --------------------- 
 
-        plt.plot(df['date'], df[y])
-        plt.title(y)
-        print(y)
-    
-
-nb_valeurs_par_date = {}
-
-def remplir_dico_moyenne(fichier, liste):
-    dico = {}
-    nb_fichiers = len(fichier)
-    
-    
-    '''
-    # extraire la date maximale de tous les fichiers
-    max_date = pd.Timestamp.min
-    for f in fichier:
-        df = pd.read_csv(f, sep="\t")
-        max_date = max(max_date, pd.to_datetime(df['date'].max()))
-    print(max_date)
-
-    max_date = pd.to_datetime('2022-12-30 00:00:00')
-
-    '''
-    liste_valeurs ={}
-    for f in fichier:
-        df = pd.read_csv(f, sep="\t")
-        df = df.fillna(value=0)
-        
-        for l in liste:
-            df[l] = df[l].apply(lambda x: float(x.replace(',', '.')) if isinstance(x, str) else x)
-            if l not in dico:
-                dico[l] = {}
-                nb_valeurs_par_date[l] = {}
-
-            if (l not in liste_valeurs): 
-                liste_valeurs[l] = {}
-            
-            '''            
-            # ajouter les dates manquantes avec une valeur de 0
-            df = df.set_index('date')
-            df = df.reindex(pd.date_range(start=df.index.min(), end=max_date, freq='D'), fill_value=0)
-            df = df.reset_index().rename(columns={'index': 'date'})'''
-
-            for i in range(len(df)):
-                date = df.loc[i, 'trace']
-                valeur = df.loc[i, l]
-
-                if(date not in liste_valeurs[l]):
-                    liste_valeurs[l][date] = []
-
-
-                if isinstance(valeur, float) and valeur!=0 :
-                    liste_valeurs[l][date].append(valeur)
-                    if date not in dico[l]:
-                        dico[l][date] = valeur
-                        nb_valeurs_par_date[l][date] = 1
-                    else:
-                        dico[l][date] += valeur
-                        nb_valeurs_par_date[l][date] += 1
-#print(df)               
-        #print(dico)
-
-    for l in dico:
-
-        for date in dico[l]:
-            moyenne = dico[l][date]/ nb_valeurs_par_date[l][date]
-            erreur = np.nanstd(liste_valeurs[l][date])/np.sqrt(nb_valeurs_par_date[l][date])
-            dico[l][date] = (moyenne, erreur)
-
-
-    return dico
-
-
-def ajouter_colonne_trace(fichier):
-    for f in fichier:
-        print(f)
-        df = pd.read_csv(f, sep="\t")
-        trace = pd.Series(range(0, -1, -1))
-        df['trace'] = trace[:len(df)]
-        df.to_csv(f, sep="\t", index=False, columns=list(df.columns) + ['trace'])
-
-
-
-def tracer_graph( x,  y, fichier ):
-    
-    # Charger le fichier CSV
-    df = pd.read_csv(fichier, sep="\t")
-
-    # Créer un graphique à partir des données
-    plt.plot(df[x], df[y])
-
-    print(df[y])
-
-    # Définir les labels des axes x et y
-    plt.xlabel(x)
-    plt.ylabel(y)
-
-    # Afficher le graphique
-    plt.show()
-
-
+'''
+Parcours l'aborescence des fichiers
+'''
 def parcourir_repertoire(chemin):
     fichiers = []
-
     # Parcourir le répertoire et stocker tous les noms de fichiers dans le tableau
     for nom_fichier in os.listdir(chemin):
         chemin_fichier = os.path.join(chemin, nom_fichier)
@@ -161,27 +30,112 @@ def parcourir_repertoire(chemin):
 
     return fichiers
 
+'''
+Transforme un string en liste : [a,b,c]
+'''
+def create_list_from_string(s):
+    # Supprimer les crochets de début et de fin
+    s = s.strip("[]")
+    
+    # Diviser la chaîne en fonction des virgules
+    values = s.split(",")
+    
+    # Convertir les valeurs en float et les ajouter à une liste
+    result = [float(value) for value in values]
+    
+    return result
+
+# --------------------- Utilitaire pour les données smart --------------------- 
+
+'''
+Fonction qui permet d'initialiser le dictionnaire des valeurs des donnée
+'''
+def remplir_dico_moyenne(fichier, liste):
+    print('Entrée dans la fonction : remplir_dico_moyenne()')
+    
+    dico = {}
+    nb_fichiers = len(fichier)
+    liste_valeurs = {}
+
+    print('Etape 1 : Somme des valeurs pour tous les disques')
+
+    for f in tqdm(fichier):
+        df = pd.read_csv(f, sep='\t')
+        df = df.fillna(value=0)
+
+        for l in liste:
+            df[l] = df[l].apply(lambda x: float(x.replace(',', '.')) if isinstance(x, str) else x)
+            if l not in dico:
+                dico[l] = {}
+                nb_valeurs_par_date[l] = {}
+
+            if l not in liste_valeurs:
+                liste_valeurs[l] = {}
+
+            for i in range(len(df)):
+                date = df.loc[i, 'trace']
+                valeur = df.loc[i, l]
+
+                if date not in liste_valeurs[l]:
+                    liste_valeurs[l][date] = []
+
+                if isinstance(valeur, float) and valeur != 0:
+                    liste_valeurs[l][date].append(valeur)
+                    if date not in dico[l]:
+                        dico[l][date] = valeur
+                        nb_valeurs_par_date[l][date] = 1
+                    else:
+                        dico[l][date] += valeur
+                        nb_valeurs_par_date[l][date] += 1
+
+    print("Etape 2 : Calcul de la moyenne et de l'erreur")
+
+    for l in tqdm(dico):
+        for date in dico[l]:
+            moyenne = dico[l][date] / nb_valeurs_par_date[l][date]
+            erreur = np.nanstd(liste_valeurs[l][date]) / np.sqrt(nb_valeurs_par_date[l][date])
+            dico[l][date] = (moyenne, erreur)
+    
+    print('Sortie de la fonction : remplir_dico_moyenne()')
+    return dico
 
 
-def ecrire_tableau_dans_csv(tableau, nom_fichier):
-    with open(nom_fichier, mode='w', newline='') as f:
-        writer = csv.writer(f, delimiter='\t')
-        for ligne in tableau:
-            writer.writerow(ligne)
 
-def tableau_csv(chemin_csv):
-    with open(chemin_csv, newline='') as f:
-        lecteur_csv = csv.reader(f)
-        tableau = [element for ligne in lecteur_csv for element in ligne]
-    return tableau
+'''
+Fonction qui permet de paralléliser l'exécution du code ajouter_colonne_trace()
+'''
+def process_file(f):
+    df = pd.read_csv(f, sep='\t')
+    trace = pd.Series(range(121, -1, -1))
+    df['trace'] = trace[: len(df)]
+    df.to_csv(f, sep='\t', index=False, columns=list(df.columns) + ['trace'])
 
+
+'''
+Fonction qui permet d'ajouter dans le csv la colonne "trace" 
+qui correspond à une date relative, 
+afin que tous les disques et la même date artificielle de début et de fin
+'''
+def ajouter_colonne_trace(fichier):
+    pool = multiprocessing.Pool(
+        processes=None
+    )  # crée un pool de processus avec tous les CPU disponibles
+    for _ in tqdm(pool.imap_unordered(process_file, fichier), total=len(fichier)):
+        pass
+
+
+
+
+'''
+Fonction qui permet de tracer le dictionnaire des données smart
+'''
 def tracer_dico(dico):
     for col, valeurs in dico.items():
         x = []
         y = []
-        yerr=[]
-        test=[]
-        for date, (valeur,erreur) in valeurs.items():
+        yerr = []
+        test = []
+        for date, (valeur, erreur) in valeurs.items():
             x.append(date)
             y.append(valeur)
             yerr.append(erreur)
@@ -190,40 +144,66 @@ def tracer_dico(dico):
         plt.xlabel('Date')
         plt.ylabel('Valeur')
         plt.legend()
+        if not os.path.exists(f'results/graphs/{col}'):
+            os.makedirs(f'results/graphs/{col}')
+        plt.savefig(f'results/graphs/{col}/graph.png')
         plt.show(block=False)
-        
-dico_duree_vie = {}
-nbdisque = 0
 
+
+
+# --------------------- Utilitaire pour la courbe en baignoire  --------------------- 
+
+'''
+Fonction qui permet d'ajouter la colonne des durée de vie
+'''
 def ajouter_colonne_duree_vie(fichier):
     global nbdisque
+    compteur = 0
+    print('Ajouter duree de vie')
     for f in fichier:
-        df = pd.read_csv(f, sep="\t")
-        if(len(df)>90):
+        df = pd.read_csv(f, sep='\t')
+        #if len(df) >= 120 and df.iloc[0]['model'] in ["ST12000NM0007","WDC WD30EFRX","ST12000NM0008","ST4000DM000","ST8000NM0055","HGST HMS5C4040ALE640","TOSHIBA MQ01ABF050M","ST12000NM0008","TOSHIBA MG07ACA14TA"] :
+
+        if len(df) >= 0 and (os.path.basename(f).startswith("2021")  or os.path.basename(f).startswith("2022")or os.path.basename(f).startswith("2020")) :
             nbdisque += 1
-            date_début_str = df.iloc[-1]['date']
-            date_début = datetime.strptime(date_début_str, '%Y-%m-%d').date()
 
-            date_fin_str = df.iloc[0]['date']
-            date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
-
-            difference = relativedelta(date_fin, date_début)
-
+            nb_heures_tot = df.iloc[0]['smart_9_raw']
+            if isinstance(nb_heures_tot, str):
+                nb_heures_tot = nb_heures_tot.replace(',', '.')[
+                    :-2
+                ]  # remplace la virgule par un point
+            else:
+                if math.isnan(nb_heures_tot):
+                    continue
+            mois = round(int(nb_heures_tot) / (30 * 24), 0)
+            #mois = math.ceil(int(nb_heures_tot) / (30 * 24) / 3) * 3
             id = df.iloc[0]['serial_number']
-            dico_duree_vie[id] = round(difference.months + difference.years * 12,0)
+            model = df.iloc[0]['model']
 
-        # df.to_csv(f, sep="\t", index=False, columns=list(df.columns) + ['duree_vie'])
-        
+            dico_duree_vie[id] = round(mois, 0)
 
-dico_baignoire = {}
 
+        else:
+            compteur = compteur + 1
+
+    print((compteur / len(fichier)) * 100)
+
+
+'''
+Fonction qui permet d'initialiser le dictionnaire correspondant à la courbe en baignoire
+'''
 def courbe_baignoire():
-    for i,m in dico_duree_vie.items():
+    print('courbe baignoire')
+    for i, m in tqdm(dico_duree_vie.items()):
         if m not in dico_baignoire:
-            dico_baignoire[m] =1
-        else: 
-            dico_baignoire[m] +=1
+            dico_baignoire[m] = 1
+        else:
+            dico_baignoire[m] += 1
 
+
+'''
+Fonction qui permet de tracer le nombre de disque qui cesse de fonctionné en fonction du temps en mois
+'''
 def tracer_courbe_de_vie():
     x = sorted(dico_baignoire.keys())
 
@@ -231,94 +211,152 @@ def tracer_courbe_de_vie():
     y = [dico_baignoire[mois] for mois in x]
 
     # On trace la courbe
-    plt.plot(x, y,'.')
+    plt.plot(x, y, '.')
 
-    plt.yticks(range(min(y), max(y)+1, 10))
+    plt.yticks(range(min(y), max(y) + 1, 10))
 
     # On ajoute des titres et des étiquettes d'axes
-    plt.title("Courbe de vie")
-    plt.xlabel("Mois")
-    plt.ylabel("Fréquence")
+    plt.title('Courbe de vie')
+    plt.xlabel('Mois')
+    plt.ylabel('Fréquence')
 
     # On affiche le graphique
     plt.show()
 
+'''
+Fonction lié à la courbe de Weibull ?
+'''
+def weib(x, k, scale):
+    return (k / scale) * (x / scale)**(k-1) * np.exp(-(x/scale)**k)
 
-
+'''
+Fonction qui trace la courbe en baignoire
+'''
 def tracer_courbe_baignoire():
     global nbdisque
-# Calcul du nombre cumulatif de défaillances
-    x = sorted(dico_baignoire.keys())
-    y = [dico_baignoire[mois]/ nbdisque for mois in x]
 
-    # Tracer la courbe de taux de défaillance cumulatif
-    plt.plot(x, y, '.')
+    # Calcul du nombre cumulatif de défaillances
+    x = sorted(dico_baignoire.keys())
+    y = []
+    for mois in x:
+        y.append(dico_baignoire[mois] / nbdisque)
+        nbdisque -= dico_baignoire[mois]
+
+    # Sauvegarde des valeurs
+    fichier_csv = "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\baignoire.csv"
+    with open(fichier_csv, 'w', newline='') as fichier:
+            writer = csv.writer(fichier)
+            writer.writerow(['x', 'y'])  # Écriture de l'en-tête
+            writer.writerows(zip(x, y))  # Écriture des données
+    '''
+        # Paramètres de la distribution de Weibull à ajuster
+        shape, loc, scale = weibull_min.fit(y)
+        
+        # Génération de points pour la courbe de tendance
+        x_tendance = np.linspace(min(x), max(x), 100)
+        
+        # Calcul du taux de défaillance (fonction de survie inversée)
+        y_tendance = (shape / scale) * ((x_tendance - loc) / scale) ** (shape - 1)
+        print("y : ",y_tendance)
+        print("shape : ",shape)
+        print("sclae : ",scale)
+        print("loc : ",loc)
+        # Tracé des points et de la courbe de tendance
+        plt.plot(x_tendance, y_tendance, label='Courbe de tendance')
+    '''
+
+    # Tracé des points et de la courbe de tendance
+    plt.plot(x, y,'o',label='Données')
+
 
     # Ajouter des titres et des étiquettes d'axes
-    plt.title("Taux de défaillance")
-    plt.xlabel("Temps (en mois)")
-    plt.ylabel("Taux de défaillance")
+    plt.title('Courbe en baignoire des disques en panne en 2020-2022')
+    plt.xlabel('Temps (en mois)')
+    plt.ylabel('Taux de disque en panne')
 
     # Afficher le graphique
     plt.show()
 
 
-# ====================     Variables     ==================== 
+# ====================     Variables     ====================
 
-#nom_fichier = "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\results"
-nom_fichier = "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\results"
 
+nom_fichier = "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\v4"
 fichier_chemin = parcourir_repertoire(nom_fichier)
+dico_baignoire = {}
+dico_duree_vie = {}
+nbdisque = 0
+nb_valeurs_par_date = {}
+nb_valeurs_par_date = {}
 
 
 
-# ====================     Données smart     ==================== 
+# ====================     Main     ====================
+
+def main():
+
+    # Créer le parseur d'arguments
+    parser = argparse.ArgumentParser(description='?')
+    
+    parser.add_argument('-d', type=float, help='Si d=1 on traite les données smart')
+
+    parser.add_argument('-b', type=float, help='Permet de donnée les années voulues. Syntaxe [a,b,c]')
+
+    parser.add_argument('-p', type=float, help='Permet de donnée la période. Valeur attendu : "mois", "annee","trimestre')
+
+    parser.add_argument('-i', type=float, help='Permet de ne plus ajouter dans les fichiers la valeurs de la "trace" si ça a déjà été lancé une fois')
+
+    # Analyser les arguments de la ligne de commande
+    args = parser.parse_args()
 
 
-'''
-ecrire_tableau_dans_csv(fichier_chemin, "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\donnee.csv")
-tab = tableau_csv("C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\donnee.csv")
+    if args.d is not None:
+
+        d = args.d
+        # ====================     Données smart     ====================
+
+        if(d==1):    
+            liste_des_donnees_smart = ['smart_1_raw', 'smart_5_raw', 'smart_188_raw', 'smart_10_raw', 'smart_187_raw', 'smart_190_raw',
+                    'smart_196_raw', 'smart_197_raw', 'smart_198_raw', 'smart_201_raw', 'smart_220_raw']
+
+            if args.i is None:
+                ajouter_colonne_trace(fichier_chemin)
+            dictio = remplir_dico_moyenne(fichier_chemin, liste_des_donnees_smart)
+            tracer_dico(dictio)
+
+        else :
+            print("Valeur de d non prise en compte ! Pour plus d'aide : -h")
+   
+
+        
+    if args.b is not None:
+
+        b = args.b
+        if(b==1):   
+            if args.p is not None : 
+                if args.p not in ["mois","annee","trimestre"] :
+                    p = "mois"
+                else: 
+                    p = args.p 
+
+                annee_voulu = create_list_from_string(b)
+
+                # ====================     Courbe en baignoire     ====================
+                
+                
+                ajouter_colonne_duree_vie(fichier_chemin)
+                
+                courbe_baignoire()
+                
+                tracer_courbe_baignoire()
+        else :
+            print("Valeur de b non prise en compte ! Pour plus d'aide : -h")
 
 
-for x in fichier_chemin:
-    tracer_graph('date','smart_222_raw', "C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\results\\2021-12-29\\Z9D0A001FVKG_90.csv")
-
-
-
-for x in fichier_chemin:
-    df = pd.read_csv(x, sep="\t")
-    for y in df.columns:
-        if(y not in liste):
-            liste.append(y)
 
 
 
 
-liste=[]
-autre =['Unnamed: 0', 'serial_number', 'model', 'capacity_bytes','date']
-df = pd.read_csv(fichier_chemin[0], sep="\t")
-for y in df.columns:
-    if y not in liste and not y.endswith('normalized') and y not in autre:
-        liste.append(y)
-'''
-#liste=['smart_1_raw','smart_5_raw','smart_188_raw','smart_10_raw','smart_187_raw','smart_190_raw','smart_196_raw','smart_197_raw','smart_198_raw','smart_201_raw','smart_220_raw']
-
-
-liste=['smart_5_raw']
-
-
-ajouter_colonne_trace(fichier_chemin)
-dictio = remplir_dico_moyenne(fichier_chemin,liste)
-
-tracer_dico(dictio)
 
 
 
-
-# ====================     Courbe en baignoire     ==================== 
-'''
-ajouter_colonne_duree_vie(fichier_chemin)
-courbe_baignoire()
-#tracer_courbe_de_vie()
-tracer_courbe_baignoire()
-'''

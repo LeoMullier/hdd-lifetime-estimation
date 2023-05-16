@@ -156,15 +156,17 @@ def tracer_dico(dico):
 '''
 Fonction qui permet d'ajouter la colonne des durée de vie
 '''
-def ajouter_colonne_duree_vie(fichier):
+def ajouter_colonne_duree_vie(fichier, annee_voulu, duree):
     global nbdisque
     compteur = 0
     print('Ajouter duree de vie')
     for f in fichier:
         df = pd.read_csv(f, sep='\t')
+        
         #if len(df) >= 120 and df.iloc[0]['model'] in ["ST12000NM0007","WDC WD30EFRX","ST12000NM0008","ST4000DM000","ST8000NM0055","HGST HMS5C4040ALE640","TOSHIBA MQ01ABF050M","ST12000NM0008","TOSHIBA MG07ACA14TA"] :
 
-        if len(df) >= 0 and (os.path.basename(f).startswith("2021")  or os.path.basename(f).startswith("2022")or os.path.basename(f).startswith("2020")) :
+        # Sélection des années voulues
+        if any(os.path.basename(f).startswith(str(annee)) for annee in annee_voulu) :
             nbdisque += 1
 
             nb_heures_tot = df.iloc[0]['smart_9_raw']
@@ -175,8 +177,12 @@ def ajouter_colonne_duree_vie(fichier):
             else:
                 if math.isnan(nb_heures_tot):
                     continue
-            mois = round(int(nb_heures_tot) / (30 * 24), 0)
-            #mois = math.ceil(int(nb_heures_tot) / (30 * 24) / 3) * 3
+
+            if(duree =="mois"):
+                mois = round(int(nb_heures_tot) / (30 * 24), 0)
+            elif(duree=="trimestre"):
+                mois = math.ceil(int(nb_heures_tot) / (30 * 24) / 3) * 3
+            
             id = df.iloc[0]['serial_number']
             model = df.iloc[0]['model']
 
@@ -185,8 +191,6 @@ def ajouter_colonne_duree_vie(fichier):
 
         else:
             compteur = compteur + 1
-
-    print((compteur / len(fichier)) * 100)
 
 
 '''
@@ -232,7 +236,7 @@ def weib(x, k, scale):
 '''
 Fonction qui trace la courbe en baignoire
 '''
-def tracer_courbe_baignoire():
+def tracer_courbe_baignoire(annee_voulu,duree):
     global nbdisque
 
     # Calcul du nombre cumulatif de défaillances
@@ -268,10 +272,14 @@ def tracer_courbe_baignoire():
     # Tracé des points et de la courbe de tendance
     plt.plot(x, y,'o',label='Données')
 
+    annee_string = ""
+    for a in annee_voulu :
+        annee_string += "-" + str(a)
+
 
     # Ajouter des titres et des étiquettes d'axes
-    plt.title('Courbe en baignoire des disques en panne en 2020-2022')
-    plt.xlabel('Temps (en mois)')
+    plt.title('Courbe en baignoire des disques en panne en '+annee_string)
+    plt.xlabel('Temps (en '+duree+' )')
     plt.ylabel('Taux de disque en panne')
 
     # Afficher le graphique
@@ -295,27 +303,38 @@ nb_valeurs_par_date = {}
 
 def main():
 
+    print("-----------------  Traitement des graphs  -----------------")
+
     # Créer le parseur d'arguments
     parser = argparse.ArgumentParser(description='?')
     
-    parser.add_argument('-d', type=float, help='Si d=1 on traite les données smart')
+    parser.add_argument('-d', type=int, help='Si d=1 on traite les données smart')
 
-    parser.add_argument('-b', type=float, help='Permet de donnée les années voulues. Syntaxe [a,b,c]')
+    parser.add_argument('-b', type=str, help='Permet de donnée les années voulues. Syntaxe [a,b,c]')
 
-    parser.add_argument('-p', type=float, help='Permet de donnée la période. Valeur attendu : "mois", "annee","trimestre')
+    parser.add_argument('-p', type=str, help='Permet de donnée la période. Valeur attendu : "mois" ou "trimestre')
 
-    parser.add_argument('-i', type=float, help='Permet de ne plus ajouter dans les fichiers la valeurs de la "trace" si ça a déjà été lancé une fois')
+    parser.add_argument('-i', type=int, help='Permet de ne plus ajouter dans les fichiers la valeurs de la "trace" si ça a déjà été lancé une fois')
+
+    parser.add_argument('-c', type=str, help='Précise la racine du fichier là ou il a les données')
 
     # Analyser les arguments de la ligne de commande
     args = parser.parse_args()
 
 
-    if args.d is not None:
+    if args.c is not None :
+        nom_fichier = args.c
 
+
+
+    if args.d is not None:
         d = args.d
         # ====================     Données smart     ====================
 
         if(d==1):    
+
+            print("-----------------  Traitement des donées smart  -----------------")
+
             liste_des_donnees_smart = ['smart_1_raw', 'smart_5_raw', 'smart_188_raw', 'smart_10_raw', 'smart_187_raw', 'smart_190_raw',
                     'smart_196_raw', 'smart_197_raw', 'smart_198_raw', 'smart_201_raw', 'smart_220_raw']
 
@@ -331,30 +350,27 @@ def main():
         
     if args.b is not None:
 
-        b = args.b
-        if(b==1):   
-            if args.p is not None : 
-                if args.p not in ["mois","annee","trimestre"] :
-                    p = "mois"
-                else: 
-                    p = args.p 
+        print("-----------------  Traitement de la courbe en baignoire  -----------------")
 
-                annee_voulu = create_list_from_string(b)
+        if args.p is not None : 
+            if args.p not in ["mois","trimestre"] :
+                p = "mois"
+            else: 
+                p = args.p 
+        else: 
+            p = "mois"
 
-                # ====================     Courbe en baignoire     ====================
-                
-                
-                ajouter_colonne_duree_vie(fichier_chemin)
-                
-                courbe_baignoire()
-                
-                tracer_courbe_baignoire()
-        else :
-            print("Valeur de b non prise en compte ! Pour plus d'aide : -h")
+        annee_voulu = create_list_from_string(args.b)
+
+        # ====================     Courbe en baignoire     ====================  
+        ajouter_colonne_duree_vie(fichier_chemin, annee_voulu, p)               
+        courbe_baignoire()          
+        tracer_courbe_baignoire(annee_voulu,p)
 
 
 
 
+main()
 
 
 

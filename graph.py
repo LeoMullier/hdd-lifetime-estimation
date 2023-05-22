@@ -41,7 +41,7 @@ def create_list_from_string(s):
     values = s.split(",")
     
     # Convertir les valeurs en float et les ajouter à une liste
-    result = [float(value) for value in values]
+    result = [int(value) for value in values]
     
     return result
 
@@ -159,6 +159,7 @@ Fonction qui permet d'ajouter la colonne des durée de vie
 def ajouter_colonne_duree_vie(fichier, annee_voulu, duree):
     global nbdisque
     compteur = 0
+    print(annee_voulu)
     print('Ajouter duree de vie')
     for f in fichier:
         df = pd.read_csv(f, sep='\t')
@@ -167,8 +168,9 @@ def ajouter_colonne_duree_vie(fichier, annee_voulu, duree):
 
         # Sélection des années voulues
         if any(os.path.basename(f).startswith(str(annee)) for annee in annee_voulu) :
+            
             nbdisque += 1
-
+            print(os.path.basename(f))
             nb_heures_tot = df.iloc[0]['smart_9_raw']
             if isinstance(nb_heures_tot, str):
                 nb_heures_tot = nb_heures_tot.replace(',', '.')[
@@ -270,7 +272,7 @@ def tracer_courbe_baignoire(annee_voulu,duree):
     '''
 
     # Tracé des points et de la courbe de tendance
-    plt.plot(x, y,'o',label='Données')
+    plt.plot(x, y,'.',label='Données')
 
     annee_string = ""
     for a in annee_voulu :

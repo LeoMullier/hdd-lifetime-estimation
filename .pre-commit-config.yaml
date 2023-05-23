@@ -10,7 +10,6 @@ repos:
   - repo: https://github.com/jphppd/pre-commit-hooks.git
     rev: 0.0.12
     hooks:
-      - id: git-check-mailmap
       - id: git-check
       - id: git-check-added-large-files
       - id: git-check-merge-conflict

@@ -17,7 +17,7 @@ import pandas as pd
 from tqdm import tqdm
 
 # ====================     Variables Globales    ====================
-NOM_FICHIER = '/home/nicolas/git/sr09-backblaze/results/2013-04-10-90-30'
+NOM_FICHIER = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\v4\\2013-04-10'
 DICO_DUREE_VIE = {}
 
 
@@ -139,8 +139,7 @@ def tracer_dico(dico):
 
 # --------------------- Utilitaire pour la courbe en baignoire  ---------------------
 
-
-def ajouter_colonne_duree_vie(fichiers, annee_voulu, duree):
+def calcul_duree_vie(fichiers, annee_voulu, duree):
     """Fonction qui permet d'ajouter la colonne des durée de vie."""
     compteur = 0
     mois = 0.0
@@ -178,6 +177,92 @@ def ajouter_colonne_duree_vie(fichiers, annee_voulu, duree):
             compteur = compteur + 1
 
     return nb_disques
+
+def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
+    """Fonction qui permet d'ajouter la colonne des durée de vie."""
+    compteur = 0
+    dico_duree_vie = {}
+    nb_disques = 0
+    print(annee_voulu)
+    print('Ajouter duree de vie')
+    for fichier in fichiers:
+        dataframe = pd.read_csv(fichier, sep='\t')
+
+        # Sélection des années voulues
+        if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
+
+            nb_disques += 1
+            print(os.path.basename(fichier))
+            valeur_totale = dataframe.iloc[0][donnee]
+            if isinstance(valeur_totale, str):
+                valeur_totale = valeur_totale.replace(',', '.')[:-2]
+                print(valeur_totale)
+            else:
+                if math.isnan(valeur_totale):
+                    continue
+
+            semaine = round(int(valeur_totale) / (24*7), 0)
+            
+
+            serial_number = dataframe.iloc[0]['serial_number']
+            dico_duree_vie[serial_number] = round(semaine, 0)
+
+        else:
+            compteur = compteur + 1
+    print(dico_duree_vie)
+    return Counter(dico_duree_vie.values()), nb_disques
+
+
+
+def calcul_vie_donnee_valeur(fichiers, annee_voulu, donnee, m):
+    """Fonction qui permet d'ajouter la colonne des durée de vie."""
+    compteur = 0
+    dico_duree_vie = {}
+    nb_disques = 0
+    print(annee_voulu)
+    print('Ajouter duree de vie')
+    for fichier in fichiers:
+        dataframe = pd.read_csv(fichier, sep='\t')
+
+        # Sélection des années voulues
+        if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
+
+            nb_disques += 1
+            print(os.path.basename(fichier))
+            valeur_totale = dataframe.iloc[0][donnee]
+            if isinstance(valeur_totale, str):
+                valeur_totale = valeur_totale.replace(',', '.')[:-2]
+                print(valeur_totale)
+            else:
+                if math.isnan(valeur_totale):
+                    continue
+
+            serial_number = dataframe.iloc[0]['serial_number']
+            dico_duree_vie[serial_number] = valeur_totale
+
+        else:
+            compteur = compteur + 1
+    print(dico_duree_vie)
+
+    #Phase de subdivition
+    min_value = min(dico_duree_vie.values())
+    max_value = max(dico_duree_vie.values())
+    print(min_value,max_value)
+    sub = round((max_value - min_value) / m, 0)
+
+    dico_organise={}
+
+    for cle, valeur in dico_duree_vie.items():
+        val = int(valeur / sub)
+        dico_organise[cle].append(val)
+
+    print(dico_organise)
+
+    
+
+    return Counter(dico_organise.values()), nb_disques
+
+
 
 
 def init_courbe_baignoire():
@@ -308,10 +393,27 @@ def main():
         annees_voulues = create_list_from_string(args.b)
 
         # ====================     Courbe en baignoire     ====================
-        nb_disques = ajouter_colonne_duree_vie(fichiers, annees_voulues, choix_mois)
+        nb_disques = calcul_duree_vie(fichiers, annees_voulues, choix_mois)
         dict_baignoire = init_courbe_baignoire()
         tracer_courbe_baignoire(annees_voulues, choix_mois, nb_disques, dict_baignoire)
 
 
+
+'''
+***** Test *****
+'''
+
+liste_des_donnees_smart = [
+    ''
+]
+
+dico,nb_disques = calcul_vie_donnee_smart_duree(parcourir_repertoire(NOM_FICHIER),[2021],"smart_9_raw")
+tracer_courbe_baignoire([2021], "mois", nb_disques, dico)
+
+
+
+'''
 if __name__ == '__main__':
     main()
+'''
+

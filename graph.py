@@ -415,7 +415,7 @@ liste_des_donnees_smart = [
 ]
 f=parcourir_repertoire(NOM_FICHIER)
 for smart in liste_des_donnees_smart :
-    dico,nb_disques = calcul_vie_donnee_smart_valeur(f,[2013,2014,2015,2016,2017,2018,2019,2020,2021,2022],smart,50)
+    dico,nb_disques = calcul_vie_donnee_smart_valeur(f,[2013,2014,2015,2016,2017,2018,2019,2020,2021,2022],smart,100)
     tracer_courbe_baignoire([2013,2022], "mois", nb_disques, dico,smart)
 
 

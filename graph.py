@@ -214,49 +214,50 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
 
 
 
-def calcul_vie_donnee_valeur(fichiers, annee_voulu, donnee, m):
+def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
     """Fonction qui permet d'ajouter la colonne des durée de vie."""
     compteur = 0
+    i = 0
     dico_duree_vie = {}
     nb_disques = 0
     print(annee_voulu)
     print('Ajouter duree de vie')
     for fichier in fichiers:
         dataframe = pd.read_csv(fichier, sep='\t')
-
+        i+=1
+        
         # Sélection des années voulues
         if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
-
-            nb_disques += 1
+            print(i)
+           
             print(os.path.basename(fichier))
             valeur_totale = dataframe.iloc[0][donnee]
             if isinstance(valeur_totale, str):
                 valeur_totale = valeur_totale.replace(',', '.')[:-2]
-                print(valeur_totale)
             else:
                 if math.isnan(valeur_totale):
                     continue
 
+            if valeur_totale == "0,0":
+                continue
+            nb_disques += 1
             serial_number = dataframe.iloc[0]['serial_number']
             dico_duree_vie[serial_number] = valeur_totale
 
         else:
             compteur = compteur + 1
-    print(dico_duree_vie)
 
     #Phase de subdivition
     min_value = min(dico_duree_vie.values())
     max_value = max(dico_duree_vie.values())
     print(min_value,max_value)
-    sub = round((max_value - min_value) / m, 0)
+    sub = round((int(max_value) - int(min_value)) / m, 0)
 
     dico_organise={}
 
     for cle, valeur in dico_duree_vie.items():
-        val = int(valeur / sub)
-        dico_organise[cle].append(val)
-
-    print(dico_organise)
+        val = int(int(valeur) / int(sub)) * sub
+        dico_organise[cle] = (val)
 
     
 
@@ -297,7 +298,7 @@ def weib(x_axis, k, scale):
     return (k / scale) * (x_axis / scale) ** (k - 1) * np.exp(-((x_axis / scale) ** k))
 
 
-def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire):
+def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire,donnee):
     """Fonction qui trace la courbe en baignoire."""
     # Calcul du nombre cumulatif de défaillances
     x_axis = sorted(dict_baignoire.keys())
@@ -307,7 +308,7 @@ def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire):
         nb_disques -= dict_baignoire[mois]
 
     # Sauvegarde des valeurs
-    fichier_csv = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\baignoire.csv'
+    fichier_csv = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\baignoire'+ donnee +'.csv'
     with open(fichier_csv, 'w', newline='', encoding='utf-8') as fichier:
         writer = csv.writer(fichier)
         writer.writerow(['x', 'y'])  # Écriture de l'en-tête
@@ -326,7 +327,7 @@ def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire):
     plt.ylabel('Taux de disque en panne')
 
     # Afficher le graphique
-    plt.show()
+    plt.show(block=False)
 
 
 # ====================     Main     ====================
@@ -404,11 +405,18 @@ def main():
 '''
 
 liste_des_donnees_smart = [
-    ''
-]
+    'smart_5_raw',
+    'smart_11_raw',
+    'smart_160_raw',
+    'smart_161_raw',
+    'smart_164_raw',
+    'smart_197_raw',
 
-dico,nb_disques = calcul_vie_donnee_smart_duree(parcourir_repertoire(NOM_FICHIER),[2021],"smart_9_raw")
-tracer_courbe_baignoire([2021], "mois", nb_disques, dico)
+]
+f=parcourir_repertoire(NOM_FICHIER)
+for smart in liste_des_donnees_smart :
+    dico,nb_disques = calcul_vie_donnee_smart_valeur(f,[2013,2014,2015,2016,2017,2018,2019,2020,2021,2022],smart,50)
+    tracer_courbe_baignoire([2013,2022], "mois", nb_disques, dico,smart)
 
 
 

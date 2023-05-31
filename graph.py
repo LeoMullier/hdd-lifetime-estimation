@@ -238,7 +238,7 @@ def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
                 if math.isnan(valeur_totale):
                     continue
 
-            if valeur_totale == "0,0":
+            if valeur_totale == "0,0" or valeur_totale == "0" or valeur_totale == "" or valeur_totale == "0.0":
                 continue
             nb_disques += 1
             serial_number = dataframe.iloc[0]['serial_number']
@@ -369,10 +369,23 @@ def main():
 
         liste_des_donnees_smart = [
             'smart_1_raw',
+            'smart_2_raw',
+            'smart_3_raw',
             'smart_5_raw',
-            'smart_188_raw',
+            'smart_7_raw',
             'smart_10_raw',
+            'smart_11_raw',
+            'smart_22_raw',
+            'smart_160_raw',
+            'smart_165_raw',
+            'smart_167_raw',
+            'smart_173_raw',
+            'smart_174_raw',
+            'smart_177_raw',
+            'smart_178_raw',
+            'smart_183_raw',
             'smart_187_raw',
+            'smart_188_raw',
             'smart_190_raw',
             'smart_196_raw',
             'smart_197_raw',
@@ -405,14 +418,32 @@ def main():
 '''
 
 liste_des_donnees_smart = [
+    'smart_1_raw',
+    'smart_2_raw',
+    'smart_3_raw',
     'smart_5_raw',
+    'smart_7_raw',
+    'smart_10_raw',
     'smart_11_raw',
+    'smart_22_raw',
     'smart_160_raw',
-    'smart_161_raw',
-    'smart_164_raw',
+    'smart_165_raw',
+    'smart_167_raw',
+    'smart_173_raw',
+    'smart_174_raw',
+    'smart_177_raw',
+    'smart_178_raw',
+    'smart_183_raw',
+    'smart_187_raw',
+    'smart_188_raw',
+    'smart_190_raw',
+    'smart_196_raw',
     'smart_197_raw',
-
+    'smart_198_raw',
+    'smart_201_raw',
+    'smart_220_raw',
 ]
+
 f=parcourir_repertoire(NOM_FICHIER)
 for smart in liste_des_donnees_smart :
     dico,nb_disques = calcul_vie_donnee_smart_valeur(f,[2013,2014,2015,2016,2017,2018,2019,2020,2021,2022],smart,100)

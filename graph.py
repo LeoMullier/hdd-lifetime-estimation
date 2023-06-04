@@ -17,7 +17,8 @@ import pandas as pd
 from tqdm import tqdm
 
 # ====================     Variables Globales    ====================
-NOM_FICHIER = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\v4\\2013-04-10'
+NOM_FICHIER = '/home/nicolas/git/sr09-backblaze/results/2013-04-10-90-30'
+# NOM_FICHIER = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\v4\\2013-04-10'
 DICO_DUREE_VIE = {}
 
 
@@ -139,6 +140,7 @@ def tracer_dico(dico):
 
 # --------------------- Utilitaire pour la courbe en baignoire  ---------------------
 
+
 def calcul_duree_vie(fichiers, annee_voulu, duree):
     """Fonction qui permet d'ajouter la colonne des durée de vie."""
     compteur = 0
@@ -178,6 +180,7 @@ def calcul_duree_vie(fichiers, annee_voulu, duree):
 
     return nb_disques
 
+
 def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
     """Fonction qui permet d'ajouter la colonne des durée de vie."""
     compteur = 0
@@ -201,8 +204,7 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
                 if math.isnan(valeur_totale):
                     continue
 
-            semaine = round(int(valeur_totale) / (24*7), 0)
-            
+            semaine = round(int(valeur_totale) / (24 * 7), 0)
 
             serial_number = dataframe.iloc[0]['serial_number']
             dico_duree_vie[serial_number] = round(semaine, 0)
@@ -213,6 +215,8 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
     return Counter(dico_duree_vie.values()), nb_disques
 
 
+import pickle
+
 
 def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
     """Fonction qui permet d'ajouter la colonne des durée de vie."""
@@ -220,50 +224,77 @@ def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
     i = 0
     dico_duree_vie = {}
     nb_disques = 0
-    print(annee_voulu)
-    print('Ajouter duree de vie')
-    for fichier in fichiers:
-        dataframe = pd.read_csv(fichier, sep='\t')
-        i+=1
-        
-        # Sélection des années voulues
-        if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
-            print(i)
-           
-            print(os.path.basename(fichier))
-            valeur_totale = dataframe.iloc[0][donnee]
-            if isinstance(valeur_totale, str):
-                valeur_totale = valeur_totale.replace(',', '.')[:-2]
-            else:
-                if math.isnan(valeur_totale):
+    print()
+    print()
+    print(f'Ajouter duree de vie pour {donnee}')
+    filename = f'{donnee}.bin'
+    filename_disk = f'{donnee}_disk.bin'
+
+    if os.path.exists(filename):
+        with open(filename, 'rb') as fichier:
+            dico_duree_vie = pickle.load(fichier)
+        with open(filename_disk, 'rb') as fichier:
+            nb_disques = pickle.load(fichier)
+    else:
+        for fichier in tqdm(fichiers):
+            dataframe = pd.read_csv(fichier, sep='\t')
+            i += 1
+
+            # Sélection des années voulues
+            if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
+                # print(i)
+
+                # print(os.path.basename(fichier))
+                valeur_totale = dataframe.iloc[0][donnee]
+                if isinstance(valeur_totale, str):
+                    valeur_totale = valeur_totale.replace(',', '.')[:-2]
+                else:
+                    if math.isnan(valeur_totale):
+                        continue
+
+                if (
+                    valeur_totale == '0,0'
+                    or valeur_totale == '0'
+                    or valeur_totale == ''
+                    or valeur_totale == '0.0'
+                ):
                     continue
+                nb_disques += 1
+                serial_number = dataframe.iloc[0]['serial_number']
+                dico_duree_vie[serial_number] = int(valeur_totale)
 
-            if valeur_totale == "0,0" or valeur_totale == "0" or valeur_totale == "" or valeur_totale == "0.0":
-                continue
-            nb_disques += 1
-            serial_number = dataframe.iloc[0]['serial_number']
-            dico_duree_vie[serial_number] = valeur_totale
+            else:
+                compteur = compteur + 1
 
-        else:
-            compteur = compteur + 1
+    # Pour sauvegarder
+    with open(filename, 'wb') as fichier:
+        pickle.dump(dico_duree_vie, fichier)
+    with open(filename_disk, 'wb') as fichier:
+        pickle.dump(nb_disques, fichier)
 
-    #Phase de subdivition
-    min_value = min(dico_duree_vie.values())
-    max_value = max(dico_duree_vie.values())
-    print(min_value,max_value)
-    sub = round((int(max_value) - int(min_value)) / m, 0)
+    dico_duree_vie = dict(sorted(dico_duree_vie.items(), key=lambda x: x[1]))
+    for _ in range(0):
+        dico_duree_vie.popitem()
 
-    dico_organise={}
+    # Phase de subdivition
+    min_value = int(min(dico_duree_vie.values(), key=int))
+    max_value = int(max(dico_duree_vie.values(), key=int))
+    print(min_value, max_value)
+    print(f'Max pour {donnee} : {max_value}')
 
-    for cle, valeur in dico_duree_vie.items():
-        val = int(int(valeur) / int(sub)) * sub
-        dico_organise[cle] = (val)
+    # Générer les points subdivisés
+    points = np.linspace(min_value, max_value, num=m)
 
-    
+    dico_organise = {}
+
+    for key, val in dico_duree_vie.items():
+        # Trouver la valeur la plus proche dans les points subdivisés
+        val = min(points, key=lambda x: abs(x - int(val)))
+        dico_organise[key] = val
+
+    dico_organise = dict(sorted(dico_organise.items()))
 
     return Counter(dico_organise.values()), nb_disques
-
-
 
 
 def init_courbe_baignoire():
@@ -298,23 +329,25 @@ def weib(x_axis, k, scale):
     return (k / scale) * (x_axis / scale) ** (k - 1) * np.exp(-((x_axis / scale) ** k))
 
 
-def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire,donnee):
+def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire, donnee):
     """Fonction qui trace la courbe en baignoire."""
     # Calcul du nombre cumulatif de défaillances
     x_axis = sorted(dict_baignoire.keys())
+    print(f'Nombre de points pour {donnee} : {len(x_axis)}')
     y_axis = []
     for mois in x_axis:
         y_axis.append(dict_baignoire[mois] / nb_disques)
         nb_disques -= dict_baignoire[mois]
 
     # Sauvegarde des valeurs
-    fichier_csv = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\baignoire'+ donnee +'.csv'
+    fichier_csv = 'baignoire_' + donnee + '.csv'
     with open(fichier_csv, 'w', newline='', encoding='utf-8') as fichier:
         writer = csv.writer(fichier)
         writer.writerow(['x', 'y'])  # Écriture de l'en-tête
         writer.writerows(zip(x_axis, y_axis))  # Écriture des données
 
     # Tracé des points et de la courbe de tendance
+    plt.figure(figsize=(10, 6))
     plt.plot(x_axis, y_axis, '.', label='Données')
 
     annee_string = ''
@@ -322,11 +355,11 @@ def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire,do
         annee_string += '-' + str(annee_voulue)
 
     # Ajouter des titres et des étiquettes d'axes
-    plt.title('Courbe en baignoire des disques en panne en ' + annee_string)
+    plt.title(donnee + annee_string)
     plt.xlabel('Temps (en ' + duree + ' )')
     plt.ylabel('Taux de disque en panne')
-
     # Afficher le graphique
+    plt.savefig(f'baignoire_{donnee}.png')
     plt.show(block=False)
 
 
@@ -412,47 +445,34 @@ def main():
         tracer_courbe_baignoire(annees_voulues, choix_mois, nb_disques, dict_baignoire)
 
 
-
 '''
 ***** Test *****
 '''
 
 liste_des_donnees_smart = [
+    'smart_220_raw',
     'smart_1_raw',
-    'smart_2_raw',
-    'smart_3_raw',
     'smart_5_raw',
     'smart_7_raw',
-    'smart_10_raw',
     'smart_11_raw',
-    'smart_22_raw',
-    'smart_160_raw',
-    'smart_165_raw',
     'smart_167_raw',
-    'smart_173_raw',
-    'smart_174_raw',
-    'smart_177_raw',
-    'smart_178_raw',
     'smart_183_raw',
     'smart_187_raw',
     'smart_188_raw',
-    'smart_190_raw',
     'smart_196_raw',
     'smart_197_raw',
     'smart_198_raw',
     'smart_201_raw',
-    'smart_220_raw',
 ]
 
-f=parcourir_repertoire(NOM_FICHIER)
-for smart in liste_des_donnees_smart :
-    dico,nb_disques = calcul_vie_donnee_smart_valeur(f,[2013,2014,2015,2016,2017,2018,2019,2020,2021,2022],smart,100)
-    tracer_courbe_baignoire([2013,2022], "mois", nb_disques, dico,smart)
-
-
+f = parcourir_repertoire(NOM_FICHIER)
+for smart in liste_des_donnees_smart:
+    dico, nb_disques = calcul_vie_donnee_smart_valeur(
+        f, [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022], smart, 1000
+    )
+    tracer_courbe_baignoire([2013, 2022], 'mois', nb_disques, dico, smart)
 
 '''
 if __name__ == '__main__':
     main()
 '''
-

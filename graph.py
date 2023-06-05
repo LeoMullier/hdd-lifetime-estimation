@@ -393,6 +393,18 @@ def main():
     )
     parser.add_argument('-c', type=str, help='Précise la racine du fichier là ou il a les données')
 
+    parser.add_argument(
+        '-s',
+        action='store_true',
+        help='Permet de tracer la courbe de Weibull pour les données SMART',
+    )
+
+    parser.add_argument(
+        '-w',
+        action=str,
+        help='Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]',
+    )
+
     # Analyser les arguments de la ligne de commande
     args = parser.parse_args()
 
@@ -442,37 +454,40 @@ def main():
         # ====================     Courbe en baignoire     ====================
         nb_disques = calcul_duree_vie(fichiers, annees_voulues, choix_mois)
         dict_baignoire = init_courbe_baignoire()
-        tracer_courbe_baignoire(annees_voulues, choix_mois, nb_disques, dict_baignoire)
+        tracer_courbe_baignoire(annees_voulues, choix_mois, nb_disques, dict_baignoire, 'durée vie')
+
+    if args.s:
+
+        if args.w is not None:
+            liste_des_donnees_smart_courbe_weibull = create_list_from_string(args.w)
+        else:
+            liste_des_donnees_smart_courbe_weibull = [
+                'smart_220_raw',
+                'smart_1_raw',
+                'smart_5_raw',
+                'smart_7_raw',
+                'smart_11_raw',
+                'smart_167_raw',
+                'smart_183_raw',
+                'smart_187_raw',
+                'smart_188_raw',
+                'smart_196_raw',
+                'smart_197_raw',
+                'smart_198_raw',
+                'smart_201_raw',
+            ]
+
+        for smart in liste_des_donnees_smart_courbe_weibull:
+            dico, nb_disques = calcul_vie_donnee_smart_valeur(
+                fichiers, [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022], smart, 1000
+            )
+            tracer_courbe_baignoire([2013, 2022], 'mois', nb_disques, dico, smart)
 
 
 '''
 ***** Test *****
 '''
 
-liste_des_donnees_smart = [
-    'smart_220_raw',
-    'smart_1_raw',
-    'smart_5_raw',
-    'smart_7_raw',
-    'smart_11_raw',
-    'smart_167_raw',
-    'smart_183_raw',
-    'smart_187_raw',
-    'smart_188_raw',
-    'smart_196_raw',
-    'smart_197_raw',
-    'smart_198_raw',
-    'smart_201_raw',
-]
 
-f = parcourir_repertoire(NOM_FICHIER)
-for smart in liste_des_donnees_smart:
-    dico, nb_disques = calcul_vie_donnee_smart_valeur(
-        f, [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022], smart, 1000
-    )
-    tracer_courbe_baignoire([2013, 2022], 'mois', nb_disques, dico, smart)
-
-'''
 if __name__ == '__main__':
     main()
-'''

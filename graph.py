@@ -24,8 +24,8 @@ from tqdm import tqdm
 import pickle
 
 # ====================     Variables Globales    ====================
-NOM_FICHIER = '/home/nicolas/git/sr09-backblaze/results/2013-04-10-90-30'
-# NOM_FICHIER = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\v4\\2013-04-10'
+#NOM_FICHIER = '/home/nicolas/git/sr09-backblaze/results/2013-04-10-90-30'
+NOM_FICHIER = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\v4\\2013-04-10'
 DICO_DUREE_VIE = {}
 
 
@@ -42,7 +42,7 @@ def parcourir_repertoire(chemin):
     return fichiers
 
 
-def chaine_caractere_vers_liste(string_input):
+def chaine_caractere_vers_liste_int(string_input):
     """Transforme une chaine de caractère en liste : [a,b,c]."""
     # Supprimer les crochets de début et de fin
     string_input = string_input.strip('[]')
@@ -56,18 +56,32 @@ def chaine_caractere_vers_liste(string_input):
     return result
 
 
+def chaine_caractere_vers_liste_string(string_input):
+    """Transforme une chaine de caractère en liste : [a,b,c]."""
+    # Supprimer les crochets de début et de fin
+    string_input = string_input.strip('[]')
+
+    # Diviser la chaîne en fonction des virgules
+    values = string_input.split(',')
+
+    # Convertir les valeurs en float et les ajouter à une liste
+    result = [str(value) for value in values]
+
+    return result
+
+
 # --------------------- Utilitaire pour les données smart ---------------------
 
 
 def remplir_dico_moyenne(fichiers, smart_list):
     """Fonction qui permet d'initialiser le dictionnaire des valeurs des données SMART."""
-    print('# Entrée dans la fonction : remplir_dico_moyenne()')
+    print('-> Entrée dans la fonction : remplir_dico_moyenne()')
 
     dico = {}
     liste_valeurs = {}
     nb_valeurs_par_date = {}
 
-    print('- Etape 1 : Somme des valeurs pour tous les disques')
+    print('# Etape 1 : Somme des valeurs pour tous les disques')
 
     for fichier in tqdm(fichiers, total=len(fichiers)):
         dataframe = pd.read_csv(fichier, sep='\t')
@@ -96,7 +110,7 @@ def remplir_dico_moyenne(fichiers, smart_list):
                     dico[smart][date] += valeur
                     nb_valeurs_par_date[smart][date] += 1
 
-    print("- Etape 2 : Calcul de la moyenne et de l'erreur")
+    print("# Etape 2 : Calcul de la moyenne et de l'erreur")
 
     for smart in tqdm(dico):
         for date in dico[smart]:
@@ -106,7 +120,7 @@ def remplir_dico_moyenne(fichiers, smart_list):
             )
             dico[smart][date] = (moyenne, erreur)
 
-    print('# Fin de la fonction : remplir_dico_moyenne()')
+    print('<- Fin de la fonction : remplir_dico_moyenne()')
     return dico
 
 
@@ -160,7 +174,7 @@ def calcul_duree_vie(fichiers, annee_voulu, duree):
     mois = 0.0
     nb_disques = 0
 
-    print(f'# Ajouter duree de vie pour les années {annee_voulu}')
+    print(f'-> Ajouter duree de vie pour les années {annee_voulu}')
     for fichier in fichiers:
         dataframe = pd.read_csv(fichier, sep='\t')
 
@@ -168,7 +182,6 @@ def calcul_duree_vie(fichiers, annee_voulu, duree):
         if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
 
             nb_disques += 1
-            print(os.path.basename(fichier))
             nb_heures_tot = dataframe.iloc[0]['smart_9_raw']
             if isinstance(nb_heures_tot, str):
                 nb_heures_tot = nb_heures_tot.replace(',', '.')[
@@ -191,7 +204,7 @@ def calcul_duree_vie(fichiers, annee_voulu, duree):
         else:
             compteur = compteur + 1
     
-    print("# Fin de l'ajout duree de vie")
+    print("<- Fin de l'ajout duree de vie")
 
     return nb_disques
 
@@ -204,19 +217,17 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
     dico_duree_vie = {}
     nb_disques = 0
     
-    print(f'# Ajouter duree de vie pour les années {annee_voulu}')
-    for fichier in fichiers:
+    print(f'-> Ajouter duree de vie pour les années {annee_voulu}')
+    for fichier in tqdm(fichiers):
         dataframe = pd.read_csv(fichier, sep='\t')
 
         # Sélection des années voulues
         if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
 
             nb_disques += 1
-            print(os.path.basename(fichier))
             valeur_totale = dataframe.iloc[0][donnee]
             if isinstance(valeur_totale, str):
                 valeur_totale = valeur_totale.replace(',', '.')[:-2]
-                print(valeur_totale)
             else:
                 if math.isnan(valeur_totale):
                     continue
@@ -229,7 +240,7 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
         else:
             compteur = compteur + 1
     
-    print("# Fin de l'ajout duree de vie")
+    print("<- Fin de l'ajout duree de vie")
     return Counter(dico_duree_vie.values()), nb_disques
 
 
@@ -237,13 +248,12 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
 
 def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, nb_points):
     """Fonction qui permet de préparer le calcul pour la courbe en baignoire pour les données SMART"""
-    compteur = 0
-    i = 0
+
     dico_duree_vie = {}
     nb_disques = 0
     print()
     print()
-    print(f'# Ajouter duree de vie pour {donnee}')
+    print(f'-> Ajouter duree de vie pour {donnee}')
     filename = f'{donnee}.bin'
     filename_disk = f'{donnee}_disk.bin'
 
@@ -285,8 +295,7 @@ def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, nb_points):
     # Phase de subdivition
     min_value = int(min(dico_duree_vie.values(), key=int))
     max_value = int(max(dico_duree_vie.values(), key=int))
-    print(min_value, max_value)
-    print(f'Max pour {donnee} : {max_value}')
+    print(f'# Pour {donnee} : max {max_value} et min {min_value}')
 
     # Générer les points subdivisés
     points = np.linspace(min_value, max_value, num=nb_points)
@@ -300,13 +309,13 @@ def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, nb_points):
 
     dico_organise = dict(sorted(dico_organise.items()))
 
-    print("# Fin de l'ajout duree de vie")
+    print("<- Fin de l'ajout duree de vie")
     return Counter(dico_organise.values()), nb_disques
 
 
 def init_courbe_baignoire():
     """Fonction qui permet d'initialiser le dictionnaire correspondant à la courbe en baignoire."""
-    print('# Initialisation du dictionnaire pour la courbe baignoire')
+    print('-> Initialisation du dictionnaire pour la courbe baignoire')
     return Counter(DICO_DUREE_VIE.values())
 
 
@@ -340,7 +349,8 @@ def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire, d
     """Fonction qui trace la courbe en baignoire."""
     # Calcul du nombre cumulatif de défaillances
     x_axis = sorted(dict_baignoire.keys())
-    print(f'Nombre de points pour {donnee} : {len(x_axis)}')
+    print("-> Début du tracer de la courbe en baignoire")
+    print(f'# Nombre de points pour {donnee} : {len(x_axis)}')
     y_axis = []
     for mois in x_axis:
         y_axis.append(dict_baignoire[mois] / nb_disques)
@@ -376,7 +386,16 @@ def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire, d
 
 def main():
     """Entry point."""
-    print('-----------------  Traitement des graphs  -----------------')
+    print('-----------------------------------------------------------')
+    print()
+    print('---------------  SR09  ~  Tracé des graphs  ---------------')
+    print()
+    print('-----------------------------------------------------------')
+    print()
+    print()
+
+
+    # Variables
     fichiers = parcourir_repertoire(NOM_FICHIER)
     choix_mois = 'mois'
 
@@ -385,6 +404,15 @@ def main():
     parser.add_argument(
         '-d', action='store_true', help='Si -d est présent, on traite les données smart'
     )
+
+
+    parser.add_argument(
+        '-e',
+        type=str,
+        help='Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]',
+    )
+
+
     parser.add_argument(
         '-b',
         type=str,
@@ -412,7 +440,7 @@ def main():
     parser.add_argument(
         '-w',
         type=str,
-        help='Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]',
+        help='Permet de donner si on le souhaite la liste des données smarts, pour les courbes de Weibull. Syntaxe : [smart_5_raw, smart_1_raw]',
     )
 
     # Analyser les arguments de la ligne de commande
@@ -420,9 +448,12 @@ def main():
 
     if args.d:
         # ====================     Données smart     ====================
-        print('-----------------  Traitement des donées smart  -----------------')
+        print('--------------- Traitement des donées smart  --------------')
 
-        liste_des_donnees_smart = [
+        if args.e is not None: 
+            liste_des_donnees_smart = chaine_caractere_vers_liste_string(args.e)
+        else :
+            liste_des_donnees_smart = [
             'smart_1_raw',
             'smart_2_raw',
             'smart_3_raw',
@@ -446,8 +477,8 @@ def main():
             'smart_197_raw',
             'smart_198_raw',
             'smart_201_raw',
-            'smart_220_raw',
-        ]
+            'smart_220_raw'
+            ]
 
         if not args.i:
             ajouter_colonne_trace(fichiers)
@@ -455,11 +486,11 @@ def main():
         tracer_dico(dictio)
 
     if args.b:
-        print('-----------------  Traitement de la courbe en baignoire  -----------------')
+        print('---------- Traitement de la courbe en baignoire  ----------')
         if args.p in ['mois', 'trimestre']:
             choix_mois = args.p
 
-        annees_voulues = chaine_caractere_vers_liste(args.b)
+        annees_voulues = chaine_caractere_vers_liste_int(args.b)
 
         # ====================     Courbe en baignoire     ====================
         nb_disques = calcul_duree_vie(fichiers, annees_voulues, choix_mois)
@@ -469,7 +500,7 @@ def main():
     if args.s:
 
         if args.w is not None: 
-            liste_des_donnees_smart_courbe_weibull = chaine_caractere_vers_liste(args.w)
+            liste_des_donnees_smart_courbe_weibull = chaine_caractere_vers_liste_string(args.w)
         else :
             liste_des_donnees_smart_courbe_weibull = [
                 'smart_220_raw',

@@ -401,36 +401,51 @@ def main():
     # Créer le parseur d'arguments
     parser = argparse.ArgumentParser(description='?')
     parser.add_argument(
-        '-d', action='store_true', help='Si -d est présent, on traite les données smart'
+        '--donnee-smart',
+        '-d', 
+        action='store_true', 
+        help='Si -d est présent, on traite les données smart'
     )
 
     parser.add_argument(
+        '--liste-donnee-smart',
         '-e',
         type=str,
-        help='Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]',
+        help='Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]. Une valeur par défaut est déjà présente.',
     )
 
     parser.add_argument(
+        '--weibull-annee-voulu',
         '-b',
         type=str,
         help='Active la génération de la courbe en baignoire. Spécifier les années '
         'voulues : Syntaxe [a,b,c]',
     )
     parser.add_argument(
-        '-p', type=str, help='Permet de donner la période. Valeurs attendues : "mois" ou "trimestre'
+        '--weibull-periode-voulu',
+        '-p', 
+        type=str, 
+        help='Permet de donner la période. Valeurs attendues : "mois" ou "trimestre". La valeur par défaut est "mois"'
     )
-    parser.add_argument('-c', type=str, help='Précise la racine du fichier là ou il a les données')
+    parser.add_argument(
+        '--fichier-racine',
+        '-c', 
+        type=str,
+        help='Précise la racine du fichier là ou il a les données'
+    )
 
     parser.add_argument(
+        '--weibull-donnee-smart',
         '-s',
         action='store_true',
         help='Permet de tracer la courbe de Weibull pour les données SMART',
     )
 
     parser.add_argument(
+        '--weibull-donnee-smart-voulu',
         '-w',
         type=str,
-        help='Permet de donner si on le souhaite la liste des données smarts, pour les courbes de Weibull. Syntaxe : [smart_5_raw, smart_1_raw]',
+        help='Permet de donner si on le souhaite la liste des données smarts, pour les courbes de Weibull. Syntaxe : [smart_5_raw, smart_1_raw]. Une valeur par défaut est déjà présente.',
     )
 
     # Analyser les arguments de la ligne de commande

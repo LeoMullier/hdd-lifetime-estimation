@@ -9,6 +9,7 @@ import csv
 import math
 import multiprocessing
 import os
+import pickle
 from collections import Counter
 
 import matplotlib.pyplot as plt
@@ -215,13 +216,8 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
     return Counter(dico_duree_vie.values()), nb_disques
 
 
-import pickle
-
-
-def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
+def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, nb_points):
     """Fonction qui permet d'ajouter la colonne des durée de vie."""
-    compteur = 0
-    i = 0
     dico_duree_vie = {}
     nb_disques = 0
     print()
@@ -238,7 +234,6 @@ def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
     else:
         for fichier in tqdm(fichiers):
             dataframe = pd.read_csv(fichier, sep='\t')
-            i += 1
 
             # Sélection des années voulues
             if any(os.path.basename(fichier).startswith(str(annee)) for annee in annee_voulu):
@@ -252,19 +247,11 @@ def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
                     if math.isnan(valeur_totale):
                         continue
 
-                if (
-                    valeur_totale == '0,0'
-                    or valeur_totale == '0'
-                    or valeur_totale == ''
-                    or valeur_totale == '0.0'
-                ):
+                if valeur_totale in ['0,0', '0', '', '0.0']:
                     continue
                 nb_disques += 1
                 serial_number = dataframe.iloc[0]['serial_number']
                 dico_duree_vie[serial_number] = int(valeur_totale)
-
-            else:
-                compteur = compteur + 1
 
     # Pour sauvegarder
     with open(filename, 'wb') as fichier:
@@ -283,14 +270,14 @@ def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, m):
     print(f'Max pour {donnee} : {max_value}')
 
     # Générer les points subdivisés
-    points = np.linspace(min_value, max_value, num=m)
+    points = np.linspace(min_value, max_value, num=nb_points)
 
     dico_organise = {}
 
     for key, val in dico_duree_vie.items():
         # Trouver la valeur la plus proche dans les points subdivisés
-        val = min(points, key=lambda x: abs(x - int(val)))
-        dico_organise[key] = val
+        new_val = min(points, key=lambda x: abs(x - int(val)))  # pylint: disable=cell-var-from-loop
+        dico_organise[key] = new_val
 
     dico_organise = dict(sorted(dico_organise.items()))
 
@@ -401,7 +388,7 @@ def main():
 
     parser.add_argument(
         '-w',
-        action=str,
+        type=str,
         help='Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]',
     )
 
@@ -482,11 +469,6 @@ def main():
                 fichiers, [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022], smart, 1000
             )
             tracer_courbe_baignoire([2013, 2022], 'mois', nb_disques, dico, smart)
-
-
-'''
-***** Test *****
-'''
 
 
 if __name__ == '__main__':

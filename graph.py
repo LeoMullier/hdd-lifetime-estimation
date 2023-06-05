@@ -3,8 +3,8 @@ Created on 25 March. 2023.
 
 @author: benjamin.roussel, nicolas.parmentier
 
-Notation : 
- 
+Notation :
+
 trace = la date relative des 90 derniers jours et des 30 premiers jours
 
 """
@@ -21,15 +21,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import pickle
 
 # ====================     Variables Globales    ====================
-#NOM_FICHIER = '/home/nicolas/git/sr09-backblaze/results/2013-04-10-90-30'
+# NOM_FICHIER = '/home/nicolas/git/sr09-backblaze/results/2013-04-10-90-30'
 NOM_FICHIER = 'C:\\Users\\utcpret\\Documents\\Benjamin\\P23\\SR09\\v4\\2013-04-10'
 DICO_DUREE_VIE = {}
 
 
 # --------------------- Utilitaire ---------------------
+
 
 def parcourir_repertoire(chemin):
     """Parcourt l'arborescence des fichiers et retourne une liste de chemins de fichiers."""
@@ -126,10 +126,11 @@ def remplir_dico_moyenne(fichiers, smart_list):
 
 def ajouter_colonne_trace(fichiers):
     """Ajoute la colonne "trace" - date relative, afin que les disques aient la même date de début et de fin."""
-    print("# Ajout de la colone des dates relatives")
+    print('# Ajout de la colone des dates relatives')
     with multiprocessing.Pool(processes=None) as pool:
         for _ in tqdm(pool.imap_unordered(process_file, fichiers), total=len(fichiers)):
             pass
+
 
 def process_file(file):
     """Fonction qui permet de paralléliser l'exécution du code ajouter_colonne_trace()."""
@@ -203,10 +204,11 @@ def calcul_duree_vie(fichiers, annee_voulu, duree):
 
         else:
             compteur = compteur + 1
-    
+
     print("<- Fin de l'ajout duree de vie")
 
     return nb_disques
+
 
 def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
     """
@@ -216,7 +218,7 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
     compteur = 0
     dico_duree_vie = {}
     nb_disques = 0
-    
+
     print(f'-> Ajouter duree de vie pour les années {annee_voulu}')
     for fichier in tqdm(fichiers):
         dataframe = pd.read_csv(fichier, sep='\t')
@@ -239,11 +241,9 @@ def calcul_vie_donnee_smart_duree(fichiers, annee_voulu, donnee):
 
         else:
             compteur = compteur + 1
-    
+
     print("<- Fin de l'ajout duree de vie")
     return Counter(dico_duree_vie.values()), nb_disques
-
-
 
 
 def calcul_vie_donnee_smart_valeur(fichiers, annee_voulu, donnee, nb_points):
@@ -349,7 +349,7 @@ def tracer_courbe_baignoire(annees_voulues, duree, nb_disques, dict_baignoire, d
     """Fonction qui trace la courbe en baignoire."""
     # Calcul du nombre cumulatif de défaillances
     x_axis = sorted(dict_baignoire.keys())
-    print("-> Début du tracer de la courbe en baignoire")
+    print('-> Début du tracer de la courbe en baignoire')
     print(f'# Nombre de points pour {donnee} : {len(x_axis)}')
     y_axis = []
     for mois in x_axis:
@@ -394,7 +394,6 @@ def main():
     print()
     print()
 
-
     # Variables
     fichiers = parcourir_repertoire(NOM_FICHIER)
     choix_mois = 'mois'
@@ -405,13 +404,11 @@ def main():
         '-d', action='store_true', help='Si -d est présent, on traite les données smart'
     )
 
-
     parser.add_argument(
         '-e',
         type=str,
         help='Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]',
     )
-
 
     parser.add_argument(
         '-b',
@@ -420,14 +417,7 @@ def main():
         'voulues : Syntaxe [a,b,c]',
     )
     parser.add_argument(
-        '-p', 
-        type=str, 
-        help='Permet de donner la période. Valeurs attendues : "mois" ou "trimestre'
-    )
-    parser.add_argument(
-        '-i',
-        action='store_true',
-        help='Permet de ne plus ajouter dans les fichiers la valeurs de la "trace" si ça a déjà été lancé une fois',
+        '-p', type=str, help='Permet de donner la période. Valeurs attendues : "mois" ou "trimestre'
     )
     parser.add_argument('-c', type=str, help='Précise la racine du fichier là ou il a les données')
 
@@ -450,38 +440,37 @@ def main():
         # ====================     Données smart     ====================
         print('--------------- Traitement des donées smart  --------------')
 
-        if args.e is not None: 
+        if args.e is not None:
             liste_des_donnees_smart = chaine_caractere_vers_liste_string(args.e)
-        else :
+        else:
             liste_des_donnees_smart = [
-            'smart_1_raw',
-            'smart_2_raw',
-            'smart_3_raw',
-            'smart_5_raw',
-            'smart_7_raw',
-            'smart_10_raw',
-            'smart_11_raw',
-            'smart_22_raw',
-            'smart_160_raw',
-            'smart_165_raw',
-            'smart_167_raw',
-            'smart_173_raw',
-            'smart_174_raw',
-            'smart_177_raw',
-            'smart_178_raw',
-            'smart_183_raw',
-            'smart_187_raw',
-            'smart_188_raw',
-            'smart_190_raw',
-            'smart_196_raw',
-            'smart_197_raw',
-            'smart_198_raw',
-            'smart_201_raw',
-            'smart_220_raw'
+                'smart_1_raw',
+                'smart_2_raw',
+                'smart_3_raw',
+                'smart_5_raw',
+                'smart_7_raw',
+                'smart_10_raw',
+                'smart_11_raw',
+                'smart_22_raw',
+                'smart_160_raw',
+                'smart_165_raw',
+                'smart_167_raw',
+                'smart_173_raw',
+                'smart_174_raw',
+                'smart_177_raw',
+                'smart_178_raw',
+                'smart_183_raw',
+                'smart_187_raw',
+                'smart_188_raw',
+                'smart_190_raw',
+                'smart_196_raw',
+                'smart_197_raw',
+                'smart_198_raw',
+                'smart_201_raw',
+                'smart_220_raw',
             ]
 
-        if not args.i:
-            ajouter_colonne_trace(fichiers)
+        ajouter_colonne_trace(fichiers)
         dictio = remplir_dico_moyenne(fichiers, liste_des_donnees_smart)
         tracer_dico(dictio)
 
@@ -499,9 +488,9 @@ def main():
 
     if args.s:
 
-        if args.w is not None: 
+        if args.w is not None:
             liste_des_donnees_smart_courbe_weibull = chaine_caractere_vers_liste_string(args.w)
-        else :
+        else:
             liste_des_donnees_smart_courbe_weibull = [
                 'smart_220_raw',
                 'smart_1_raw',
@@ -520,7 +509,7 @@ def main():
 
         for smart in liste_des_donnees_smart_courbe_weibull:
             dico, nb_disques = calcul_vie_donnee_smart_valeur(
-                fichiers, [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022], smart, 1000
+                fichiers, [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022], smart, 100
             )
             tracer_courbe_baignoire([2013, 2022], 'mois', nb_disques, dico, smart)
 

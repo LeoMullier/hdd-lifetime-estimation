@@ -175,7 +175,7 @@ def calcul_duree_vie(fichiers, annee_voulu, duree):
     nb_disques = 0
 
     print(f'-> Ajouter duree de vie pour les années {annee_voulu}')
-    for fichier in fichiers:
+    for fichier in tqdm(fichiers):
         dataframe = pd.read_csv(fichier, sep='\t')
 
         # Sélection des années voulues

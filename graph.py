@@ -427,12 +427,6 @@ def main():
         type=str, 
         help='Permet de donner la période. Valeurs attendues : "mois" ou "trimestre". La valeur par défaut est "mois"'
     )
-    parser.add_argument(
-        '--fichier-racine',
-        '-c', 
-        type=str,
-        help='Précise la racine du fichier là ou il a les données'
-    )
 
     parser.add_argument(
         '--weibull-donnee-smart',

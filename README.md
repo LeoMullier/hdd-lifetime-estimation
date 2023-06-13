@@ -1,92 +1,138 @@
 # SR09-BackBlaze
 
+## Introduction
 
+Dans le cadre de ce projet, nous avons créé un dépôt GitLab contenant le code Python associé au traitement des données de BackBlaze. Le code du projet est disponible à l'adresse suivante : https://gitlab.utc.fr/niparmen/sr09-backblaze
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.utc.fr/niparmen/sr09-backblaze.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.utc.fr/niparmen/sr09-backblaze/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Auteurs
+MULLIER Léo\
+PARMENTIER Nicolas\
+ROUSSEL Benjamin
 
 ## License
-For open source projects, say how it is licensed.
+License Creative Commons `CC-BY-NC-SA`
+- Adaptation autorisées sous condition de partage dans les mêmes conditions
+- Pas d'utilisation commerciale
 
 ## Project status
 If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
+
+## Affichage des données S.M.A.R.T d'un disque
+
+### Linux
+
+Smartmontools est un paquet (à installer avec apt) regroupant un ensemble d'outils basés sur la "technologie" SMART. Cette technologie est un protocole qui permet de suivre et contrôler l'état des disques durs entiers. Les données SMART ignorent les partitions et le partitionnement.
+
+#### Installation
+
+`sudo apt-get install --no-install-recommends smartmontools`
+
+Pour les disques NVME, il faut aussi installer le paquet nvme-cli :\
+`sudo apt install nvme-cli`
+
+#### Utilisation
+
+Dans les exemples suivants, on va considérer le disque dur nommé /dev/sdX.
+
+Pour activer SMART sur un disque, taper la commande suivante (nécessaire une seule fois seulement pour chaque disque, mais peut être répétée sans danger) :\
+`sudo smartctl --smart=on --offlineauto=on --saveauto=on /dev/sdX`
+
+Pour obtenir quelques infos disponibles par SMART sur le disque :\
+`sudo smartctl -H -i /dev/sdX`
+
+Pour obtenir toutes les infos disponibles par SMART sur le disque :\
+`sudo smartctl -s on -a /dev/sdX`
+
+Le paquet smartmontools permet aussi de :
+- Recevoir des notifications automatiquement lorsque le daemon smartmontools détecte une erreur importante sur un disque
+- Lancer des tests (entre 10 min et 90 min) pour tester les disques
+
+Plus d'infos : https://doc.ubuntu-fr.org/smartmontools
+
+### Windows
+
+CrystalDiskInfo est un utilitaire complet de diagnostics, vérification et surveillance de disque qui permet de :
+
+- Afficher les valeurs les S.M.A.R.T afin de prévenir les pannes de disque
+- Mesurer la température du disque pour éviter les surchauffes
+- Alerter et notifier par mail
+
+#### Installation
+
+Télécharger le .exe sur https://crystalmark.info/en/software/crystaldiskinfo/
+Executer le .exe
+Lancer le logiciel
+
+#### Utilisation
+
+La page de CrystalDiskInfo se présente ainsi :
+
+En haut, les informations du disque (modèle, numéro de série, etc.)
+En haut à gauche, l'état de santé et la température du disque dur. C'est un résumé de l'état général.
+À sa droite, les informations du disque (numéro de série, interface, lettre de lecteur, etc.)
+Puis dans la seconde partie, la liste des attributs S.M.A.R.T.
+
+
+## Utilisation de bbdata_parser.py
+
+Le programme nécessite la présence des fichiers sources de BackBlaze (au format CSV) dans le répertoire data/csv, situé à la racine du dépôt.
+
+`-h, --help`\
+Affiche le message d'aide
+
+`--history_length_recent`\
+Entier représentant la longueur de l'historique (début de vie) - si nul alors tout l'historique sera récupéré
+
+`--history_length_old`\
+Entier représentant la longueur de l'historique (fin de vie) - si nul alors tout l'historique sera récupéré
+
+`--failure_start_date`\
+A partir de quelle date commencer la recherche de défaillances ? (format YYYY-mm-dd)
+
+### Exemple d'exécution :
+
+Obtenir les données des disques tombés en panne après le 01/01/2015 (30 premiers et 90 derniers jours de vie du disque) :\
+`--failure_start_date 2015-01-01 --history_length_recent 90 --history_length_old 30`
+
+Obtenir toutes les données des disques tombés en panne après le 01/01/2015 :\
+`--failure_start_date 2015-01-01 --history_length_old 0`
+
+## Utilisation de graph.py
+
+Le programme s'exécute simplement avec Python : python ./graph.py (ou py3 si la version de Python est la 3). Les fichiers CSV seront créés à la racine du projet, sauf demande contraire, et auront pour nom : "baignoire_+donnee+.csv", où donnée correspond au nom de la donnée S.M.A.R.T.
+
+Concernant les paramètres, nous avons pour les données S.M.A.R.T. :
+
+`-d, --donnee-smart`\
+Si le paramètre d est présent, on trace les données S.M.A.R.T.
+
+`-e, --liste-donnee-smart`\
+Permet de donner si on le souhaite la liste des données smarts. Syntaxe : [smart_5_raw, smart_1_raw]. Une valeur par défaut est déjà présente.
+
+Pour la courbe en baignoire :
+
+`-b, --weibull-annee-voulu`\
+On précise ici que l'on souhaite tracer la courbe en baignoire, nous devons aussi spécifier sur quelles années on souhaite la tracer, la syntaxe est "[a,b,...]", où a,b,... sont des années entre 2015 et 2022.
+
+`-p, --weibull-periode-voulu`\
+Permets de donner la période pour tracer la courbe en baignoire. Les valeurs sont "mois" et "trimestre". Par exemple, si vous choisissez "mois", le taux de mortalité sera donné en fonction du temps en mois. Par défaut, la valeur est "mois".
+
+Pour la courbe en baignoire des données S.M.A.R.T. :
+
+`-s, --weibull-donnee-smart`\
+Permet de tracer la courbe de Weibull pour les données SMART.
+
+`-w, --weibull-donnee-smart-voulu`\
+Permet de donner si on le souhaite la liste des données smarts, pour les courbes de Weibull. Syntaxe : [smart_5_raw, smart_1_raw]. Une valeur par défaut est déjà présente.
+
+Nous pouvons donner des exemples d'exécution :
+
+Si nous souhaitons afficher le graphique des données S.M.A.R.T. pour le n°5 :\
+`--donnee-smart --liste-donnee-smart [smart_5_raw]`
+
+Si nous souhaitons tracer la courbe de Weibull entre les années 2021 - 2022 en mois :\
+`--weibull-annee-voulu [2021,2022] --weibull-periode-voulu mois`
+
+Si nous souhaitons tracer les courbes en baignoire des données S.M.A.R.T. pour le n°11 :\
+`--weibull-donnee-smart --weibull-donnee-smart-voulu [smart_11_raw]`
